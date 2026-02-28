@@ -147,6 +147,29 @@ function App() {
     }
   }, [filteredProperties, selectedId]);
 
+  useEffect(() => {
+    const elements = document.querySelectorAll(".reveal-on-scroll");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+          } else {
+            entry.target.classList.remove("is-visible");
+          }
+        });
+      },
+      {
+        threshold: 0.18,
+        rootMargin: "0px 0px -8% 0px"
+      }
+    );
+
+    elements.forEach((element) => observer.observe(element));
+
+    return () => observer.disconnect();
+  }, [filteredProperties.length, selectedProperty, selectedForecast, mode]);
+
   const topFit = filteredProperties[0];
   const selectedHistory = selectedProperty?.market_history ?? [];
   const rentSeries = selectedHistory.map((entry) => entry.rent_index);
@@ -154,7 +177,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="hero">
+      <header className="hero reveal-on-scroll is-visible">
         <div className="hero-copy">
           <p className="eyebrow">LeaseLens</p>
           <h1>Rental decisions with Zillow-style history and forecast signals.</h1>
@@ -192,7 +215,7 @@ function App() {
 
       {!loading && !error ? (
         <main className="dashboard">
-          <section className="panel filter-panel">
+          <section className="panel filter-panel reveal-on-scroll" style={{ "--reveal-delay": "40ms" }}>
             <div className="panel-heading">
               <p className="eyebrow">Property selector</p>
               <h2>Find rentals by budget</h2>
@@ -212,10 +235,13 @@ function App() {
             </label>
 
             <div className="property-list">
-              {filteredProperties.map((property) => (
+              {filteredProperties.map((property, index) => (
                 <button
                   key={property.id}
-                  className={`property-card ${selectedId === property.id ? "selected" : ""}`}
+                  className={`property-card reveal-on-scroll ${
+                    selectedId === property.id ? "selected" : ""
+                  }`}
+                  style={{ "--reveal-delay": `${80 + index * 45}ms` }}
                   onClick={() => setSelectedId(property.id)}
                 >
                   <div>
@@ -231,7 +257,7 @@ function App() {
             </div>
 
             {topFit ? (
-              <div className="fit-card">
+              <div className="fit-card reveal-on-scroll" style={{ "--reveal-delay": "160ms" }}>
                 <p className="card-label">Closest match</p>
                 <strong>{topFit.name}</strong>
                 <span>{topFit.neighborhood}</span>
@@ -243,41 +269,41 @@ function App() {
 
           {selectedProperty ? (
             <>
-              <section className="panel overview-panel">
+              <section className="panel overview-panel reveal-on-scroll" style={{ "--reveal-delay": "90ms" }}>
                 <div className="panel-heading">
                   <p className="eyebrow">Selected property</p>
                   <h2>{selectedProperty.name}</h2>
                 </div>
                 <div className="stats-grid">
-                  <article>
+                  <article className="reveal-on-scroll" style={{ "--reveal-delay": "120ms" }}>
                     <span>Rent</span>
                     <strong>{currency.format(selectedProperty.monthly_rent)}</strong>
                   </article>
-                  <article>
+                  <article className="reveal-on-scroll" style={{ "--reveal-delay": "170ms" }}>
                     <span>Market value</span>
                     <strong>{compactCurrency.format(selectedProperty.estimated_value)}</strong>
                   </article>
-                  <article>
+                  <article className="reveal-on-scroll" style={{ "--reveal-delay": "220ms" }}>
                     <span>Occupancy</span>
                     <strong>{percent.format(selectedProperty.occupancy_rate)}</strong>
                   </article>
-                  <article>
+                  <article className="reveal-on-scroll" style={{ "--reveal-delay": "270ms" }}>
                     <span>Location</span>
                     <strong>{selectedProperty.neighborhood}</strong>
                   </article>
                 </div>
 
                 <div className="insight-grid">
-                  <article className="insight-card">
+                  <article className="insight-card reveal-on-scroll" style={{ "--reveal-delay": "160ms" }}>
                     <p className="card-label">Rent history</p>
-                    <Sparkline values={rentSeries} stroke="#9f2a2a" />
+                    <Sparkline values={rentSeries} stroke="#cf8696" />
                     <span>
                       12-month change: {percent.format(selectedProperty.market_summary.rent_growth_12m)}
                     </span>
                   </article>
-                  <article className="insight-card">
+                  <article className="insight-card reveal-on-scroll" style={{ "--reveal-delay": "220ms" }}>
                     <p className="card-label">Home value history</p>
-                    <Sparkline values={valueSeries} stroke="#205b49" />
+                    <Sparkline values={valueSeries} stroke="#88b6a2" />
                     <span>
                       12-month change: {percent.format(selectedProperty.market_summary.value_growth_12m)}
                     </span>
@@ -285,7 +311,7 @@ function App() {
                 </div>
               </section>
 
-              <section className="panel decision-panel">
+              <section className="panel decision-panel reveal-on-scroll" style={{ "--reveal-delay": "120ms" }}>
                 <div className="panel-heading">
                   <p className="eyebrow">
                     {mode === "renter" ? "Renter decision support" : "Landlord forecast"}
@@ -310,21 +336,21 @@ function App() {
                   </div>
                 ) : selectedForecast ? (
                   <div className="decision-copy">
-                    <div className="forecast-banner">
+                    <div className="forecast-banner reveal-on-scroll" style={{ "--reveal-delay": "150ms" }}>
                       <span className="card-label">Forecast confidence</span>
                       <strong>{percent.format(selectedForecast.appreciation_probability)}</strong>
                     </div>
                     <p>{selectedForecast.summary}</p>
                     <div className="stats-grid compact">
-                      <article>
+                      <article className="reveal-on-scroll" style={{ "--reveal-delay": "180ms" }}>
                         <span>Projected 12-mo value</span>
                         <strong>{compactCurrency.format(selectedForecast.projected_value_12m)}</strong>
                       </article>
-                      <article>
+                      <article className="reveal-on-scroll" style={{ "--reveal-delay": "230ms" }}>
                         <span>Expected gain</span>
                         <strong>{compactCurrency.format(selectedForecast.expected_gain_12m)}</strong>
                       </article>
-                      <article>
+                      <article className="reveal-on-scroll" style={{ "--reveal-delay": "280ms" }}>
                         <span>Yield score</span>
                         <strong>{selectedForecast.investment_score}/100</strong>
                       </article>
@@ -338,7 +364,7 @@ function App() {
                 ) : null}
               </section>
 
-              <section className="panel history-panel">
+              <section className="panel history-panel reveal-on-scroll" style={{ "--reveal-delay": "160ms" }}>
                 <div className="panel-heading">
                   <p className="eyebrow">Historical data</p>
                   <h2>Monthly trend snapshot</h2>
