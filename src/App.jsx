@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API_BASE = "http://127.0.0.1:8000/api";
+const API_BASE = "/api";
 const CHART_COLORS = ["#d88b9a", "#88b6a2", "#89a8d8", "#f2b880"];
 const WINDOW_SIZE = 12;
 
@@ -28,6 +28,12 @@ const factorLabels = {
   occupancy: "Occupancy",
   neighborhood: "Neighborhood"
 };
+
+const footerFaqs = [
+  "How is the renter comparison data shown? It uses the selected properties and compares their recent rent and home-value trend history side by side.",
+  "Is the landlord forecast a guarantee? No. It is an explainable heuristic score based on market history, occupancy, and neighborhood signals.",
+  "Can other people view my localhost? No. Localhost is only visible on the computer running the app unless it is deployed or tunneled."
+];
 
 function ComparisonChart({ title, months, series, valueKey, formatter }) {
   const visibleMonths = months.slice(0, WINDOW_SIZE);
@@ -306,6 +312,7 @@ function App() {
   const [windowDirection, setWindowDirection] = useState(1);
   const [landlordTrendIndex, setLandlordTrendIndex] = useState(23);
   const [activeFactor, setActiveFactor] = useState("value_growth");
+  const [openFooterPanel, setOpenFooterPanel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [mode, setMode] = useState("renter");
@@ -712,6 +719,81 @@ function App() {
           ) : null}
         </main>
       ) : null}
+
+      <footer className="site-footer reveal-on-scroll">
+        <div className="footer-brand">
+          <p className="eyebrow">LeaseLens</p>
+          <strong>Rental comparison for renters. Explainable forecasting for landlords.</strong>
+          <p className="footer-summary">
+            Housing decisions with property comparisons, market trends, and transparent scoring.
+          </p>
+        </div>
+        <div className="footer-content">
+          <nav className="footer-links" aria-label="Footer">
+            {[
+              ["about", "About us"],
+              ["how", "How it works"],
+              ["faq", "FAQ"],
+              ["contact", "Contact us"],
+              ["help", "Help"],
+              ["disclaimer", "Forecast disclaimer"]
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`footer-link-button ${openFooterPanel === key ? "active" : ""}`}
+                onClick={() => setOpenFooterPanel((current) => (current === key ? null : key))}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          {openFooterPanel ? (
+            <div className="footer-dropdown">
+              {openFooterPanel === "about" ? (
+                <p>
+                  LeaseLens is a housing decision prototype focused on two user groups: renters who
+                  need clearer property comparisons, and landlords who want explainable forecast signals.
+                </p>
+              ) : null}
+              {openFooterPanel === "how" ? (
+                <p>
+                  Renters compare selected properties across trend charts and current pricing, while
+                  landlords select an address and review an explainable score, factors, and market metrics.
+                </p>
+              ) : null}
+              {openFooterPanel === "faq" ? (
+                <div className="footer-faq-list">
+                  {footerFaqs.map((item) => (
+                    <p key={item}>{item}</p>
+                  ))}
+                </div>
+              ) : null}
+              {openFooterPanel === "contact" ? (
+                <p>
+                  Contact us at <strong>888-888-8888</strong> for product support or general questions.
+                </p>
+              ) : null}
+              {openFooterPanel === "help" ? (
+                <p>
+                  Help content placeholder: this section can later include setup help, troubleshooting,
+                  onboarding guidance, and answers for common renter or landlord workflows.
+                </p>
+              ) : null}
+              {openFooterPanel === "disclaimer" ? (
+                <p>
+                  Forecast outputs are heuristic product guidance only. They should not be treated as
+                  financial, legal, or investment advice.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="footer-legal">
+            <a href="#">Privacy policy</a>
+            <a href="#">Website terms</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
