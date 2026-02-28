@@ -1,0 +1,98 @@
+[
+  {
+    "id": "irvine-spectrum-lofts",
+    "name": "Spectrum Lofts",
+    "city": "Irvine",
+    "state": "CA",
+    "neighborhood": "Irvine Spectrum",
+    "bedrooms": 2,
+    "bathrooms": 2,
+    "monthly_rent": 3380,
+    "estimated_value": 912000,
+    "occupancy_rate": 0.96,
+    "walk_score": 72,
+    "transit_score": 61,
+    "renter_takeaway": "Stable occupancy and steady rent growth make this a lower-volatility rental pick, but pricing is already premium for the submarket.",
+    "market_history": [
+      { "month": "2025-01", "rent_index": 3010, "home_value_index": 842000 },
+      { "month": "2025-03", "rent_index": 3055, "home_value_index": 851000 },
+      { "month": "2025-05", "rent_index": 3120, "home_value_index": 864000 },
+      { "month": "2025-07", "rent_index": 3195, "home_value_index": 878000 },
+      { "month": "2025-09", "rent_index": 3265, "home_value_index": 891000 },
+      { "month": "2025-11", "rent_index": 3330, "home_value_index": 904000 },
+      { "month": "2026-01", "rent_index": 3380, "home_value_index": 912000 }
+    ]
+  },
+  {
+    "id": "austin-elm-residences",
+    "name": "Elm Residences",
+    "city": "Austin",
+    "state": "TX",
+    "neighborhood": "South Lamar",
+    "bedrooms": 1,
+    "bathrooms": 1,
+    "monthly_rent": 2440,
+    "estimated_value": 534000,
+    "occupancy_rate": 0.93,
+    "walk_score": 84,
+    "transit_score": 58,
+    "renter_takeaway": "This market shows softer home-value momentum than coastal metros, which can help renters negotiate while still benefiting from strong neighborhood demand.",
+    "market_history": [
+      { "month": "2025-01", "rent_index": 2290, "home_value_index": 521000 },
+      { "month": "2025-03", "rent_index": 2310, "home_value_index": 519000 },
+      { "month": "2025-05", "rent_index": 2345, "home_value_index": 523000 },
+      { "month": "2025-07", "rent_index": 2370, "home_value_index": 527000 },
+      { "month": "2025-09", "rent_index": 2400, "home_value_index": 530000 },
+      { "month": "2025-11", "rent_index": 2425, "home_value_index": 532000 },
+      { "month": "2026-01", "rent_index": 2440, "home_value_index": 534000 }
+    ]
+  },
+  {
+    "id": "seattle-harbor-flats",
+    "name": "Harbor Flats",
+    "city": "Seattle",
+    "state": "WA",
+    "neighborhood": "Ballard",
+    "bedrooms": 2,
+    "bathrooms": 1,
+    "monthly_rent": 3120,
+    "estimated_value": 774000,
+    "occupancy_rate": 0.94,
+    "walk_score": 79,
+    "transit_score": 71,
+    "renter_takeaway": "Rent growth remains durable and transit access is strong, but renters should watch for continued affordability pressure if local supply stays tight.",
+    "market_history": [
+      { "month": "2025-01", "rent_index": 2870, "home_value_index": 716000 },
+      { "month": "2025-03", "rent_index": 2910, "home_value_index": 727000 },
+      { "month": "2025-05", "rent_index": 2960, "home_value_index": 738000 },
+      { "month": "2025-07", "rent_index": 3010, "home_value_index": 750000 },
+      { "month": "2025-09", "rent_index": 3065, "home_value_index": 761000 },
+      { "month": "2025-11", "rent_index": 3095, "home_value_index": 769000 },
+      { "month": "2026-01", "rent_index": 3120, "home_value_index": 774000 }
+    ]
+  },
+  {
+    "id": "phoenix-sage-courts",
+    "name": "Sage Courts",
+    "city": "Phoenix",
+    "state": "AZ",
+    "neighborhood": "Downtown Phoenix",
+    "bedrooms": 1,
+    "bathrooms": 1,
+    "monthly_rent": 1980,
+    "estimated_value": 418000,
+    "occupancy_rate": 0.9,
+    "walk_score": 69,
+    "transit_score": 53,
+    "renter_takeaway": "This is the more budget-flexible option in the set. Rent levels are climbing, but slower appreciation suggests less heat than the most expensive metros.",
+    "market_history": [
+      { "month": "2025-01", "rent_index": 1850, "home_value_index": 401000 },
+      { "month": "2025-03", "rent_index": 1870, "home_value_index": 403000 },
+      { "month": "2025-05", "rent_index": 1895, "home_value_index": 406000 },
+      { "month": "2025-07", "rent_index": 1920, "home_value_index": 410000 },
+      { "month": "2025-09", "rent_index": 1945, "home_value_index": 413000 },
+      { "month": "2025-11", "rent_index": 1965, "home_value_index": 416000 },
+      { "month": "2026-01", "rent_index": 1980, "home_value_index": 418000 }
+    ]
+  }
+]
