@@ -148,16 +148,11 @@ h2 {
 
 .dashboard {
   display: grid;
-  grid-template-columns: 0.95fr 1.05fr;
   gap: 22px;
 }
 
 .panel {
   padding: 24px;
-}
-
-.filter-panel {
-  grid-row: span 3;
 }
 
 .panel-heading {
@@ -210,7 +205,7 @@ h2 {
 }
 
 .property-market,
-.decision-copy p,
+.decision-copy,
 .fit-card span,
 .status {
   color: var(--muted);
@@ -287,6 +282,293 @@ h2 {
   background: linear-gradient(135deg, rgba(238, 249, 242, 0.96), rgba(255, 243, 246, 0.94));
 }
 
+.landlord-overview-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.forecast-score-card,
+.factor-focus-card,
+.landlord-chart-detail {
+  background: linear-gradient(135deg, rgba(255, 244, 247, 0.96), rgba(240, 249, 244, 0.92));
+  border: 1px solid rgba(216, 139, 154, 0.2);
+  border-radius: 22px;
+  padding: 18px;
+}
+
+.forecast-score-card strong {
+  display: block;
+  font-size: 3rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.forecast-score-card span {
+  color: var(--muted);
+}
+
+.forecast-decision {
+  margin-top: 14px;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--accent), #e8a4b2);
+  color: white;
+}
+
+.landlord-disclaimer {
+  color: var(--muted);
+  max-width: 72ch;
+}
+
+.landlord-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+
+.landlord-chart-axis-x {
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  font-size: 0.72rem;
+}
+
+.landlord-chart-detail {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.factor-scale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.factor-list {
+  display: grid;
+  gap: 12px;
+}
+
+.factor-row {
+  border: 1px solid rgba(117, 137, 161, 0.14);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.84);
+  display: grid;
+  grid-template-columns: 1.2fr 2fr 0.8fr;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  color: var(--ink);
+}
+
+.factor-row.active {
+  border-color: rgba(216, 139, 154, 0.36);
+  box-shadow: 0 12px 24px rgba(216, 139, 154, 0.1);
+}
+
+.factor-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(117, 137, 161, 0.12);
+  overflow: hidden;
+}
+
+.factor-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e8a4b2, #88b6a2);
+}
+
+.factor-score {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.factor-focus-card {
+  margin-top: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.factor-focus-card strong {
+  font-size: 1.2rem;
+}
+
+.renter-comparison-panel,
+.chart-controls-panel,
+.comparison-chart-card,
+.comparison-table-card,
+.renter-summary-panel,
+.landlord-selector-panel {
+  overflow: hidden;
+}
+
+.landlord-select-wrap {
+  display: grid;
+  gap: 10px;
+  max-width: 420px;
+  color: var(--muted);
+}
+
+.landlord-select {
+  appearance: none;
+  border: 1px solid rgba(117, 137, 161, 0.18);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 245, 248, 0.95), rgba(244, 249, 255, 0.92));
+  color: var(--ink);
+  padding: 14px 16px;
+  box-shadow: 0 10px 22px rgba(147, 170, 193, 0.12);
+  cursor: pointer;
+}
+
+.comparison-property-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.comparison-property-card {
+  border: 1px solid rgba(117, 137, 161, 0.15);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.comparison-property-card.selected {
+  border-color: rgba(216, 139, 154, 0.42);
+  box-shadow: 0 16px 28px rgba(216, 139, 154, 0.1);
+  background: linear-gradient(135deg, rgba(255, 245, 248, 0.96), rgba(244, 249, 255, 0.92));
+}
+
+.comparison-select,
+.comparison-focus {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+
+.comparison-select {
+  justify-self: start;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(216, 139, 154, 0.14);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.comparison-focus {
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+}
+
+.chart-stage {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.chart-main {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 251, 255, 0.86));
+  border: 1px solid rgba(117, 137, 161, 0.14);
+  border-radius: 24px;
+  padding: 16px 18px 12px;
+}
+
+.comparison-chart {
+  width: 100%;
+  height: 320px;
+  overflow: visible;
+}
+
+.comparison-line {
+  transition: points 500ms ease;
+}
+
+.chart-axis {
+  display: grid;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.chart-axis-y {
+  grid-template-rows: repeat(4, 1fr);
+  align-items: end;
+  padding-block: 10px 38px;
+}
+
+.chart-axis-x {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  margin-top: 6px;
+  gap: 4px;
+  text-align: center;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.comparison-table {
+  display: grid;
+  gap: 10px;
+}
+
+.comparison-table-row {
+  display: grid;
+  grid-template-columns: 2fr 0.8fr 0.9fr 0.7fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.comparison-table-header {
+  background: rgba(216, 139, 154, 0.12);
+  font-weight: 700;
+}
+
+.comparison-table-row strong,
+.comparison-table-row small {
+  display: block;
+}
+
+.comparison-table-row small {
+  color: var(--muted);
+  margin-top: 4px;
+}
+
 .flat-list {
   padding-left: 18px;
   margin: 16px 0 0;
@@ -355,14 +637,16 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .filter-panel {
-    grid-row: auto;
-  }
-
   .stats-grid,
   .stats-grid.compact,
-  .insight-grid {
+  .insight-grid,
+  .comparison-property-list,
+  .landlord-bottom-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .comparison-table-row {
+    grid-template-columns: 1.6fr 1fr 1fr 0.8fr;
   }
 }
 
@@ -379,7 +663,9 @@ h2 {
   }
 
   .hero-actions,
-  .property-metrics {
+  .property-metrics,
+  .landlord-overview-top,
+  .landlord-chart-detail {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -387,7 +673,26 @@ h2 {
   .stats-grid,
   .stats-grid.compact,
   .insight-grid,
-  .history-row {
+  .history-row,
+  .comparison-property-list,
+  .comparison-table-row,
+  .chart-stage,
+  .landlord-bottom-grid,
+  .factor-row {
     grid-template-columns: 1fr;
+  }
+
+  .chart-axis-y {
+    grid-template-rows: none;
+    grid-template-columns: repeat(4, 1fr);
+    padding: 0;
+  }
+
+  .chart-axis-x {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .landlord-chart-axis-x {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
   }
 }

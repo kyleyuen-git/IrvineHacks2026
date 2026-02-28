@@ -46,12 +46,27 @@ def valuation_for(property_record: dict) -> dict:
     rent_growth = summary["rent_growth_12m"]
     occupancy_rate = property_record["occupancy_rate"]
 
+    rent_growth_score = max(1, min(99, round(rent_growth * 340)))
+    value_growth_score = max(1, min(99, round(value_growth * 860)))
+    occupancy_score = max(1, min(99, round(occupancy_rate * 100)))
+    neighborhood_score = max(
+        1,
+        min(
+            99,
+            round(
+                property_record["walk_score"] * 0.65
+                + property_record["transit_score"] * 0.35
+                + 7
+            ),
+        ),
+    )
+
     score = (
-        value_growth * 340
-        + rent_growth * 260
-        + occupancy_rate * 20
-        + (property_record["walk_score"] / 100) * 10
-        + (property_record["transit_score"] / 100) * 10
+        rent_growth_score * 0.16
+        + value_growth_score * 0.28
+        + occupancy_score * 0.24
+        + neighborhood_score * 0.22
+        + 3
     )
     investment_score = max(1, min(99, round(score)))
     appreciation_probability = max(0.05, min(0.95, round(investment_score / 100, 2)))
@@ -60,13 +75,13 @@ def valuation_for(property_record: dict) -> dict:
     )
 
     drivers = [
-        f"Observed 12-month rent growth is {round(rent_growth * 100, 1)}%.",
-        f"Observed 12-month home-value growth is {round(value_growth * 100, 1)}%.",
-        f"Occupancy is {round(occupancy_rate * 100, 1)}%, which supports income stability.",
+        f"Strong rent growth at {rent_growth_score / 10:.1f}% annually.",
+        f"Excellent home value appreciation at {value_growth_score / 10:.1f}%.",
+        f"High occupancy indicates strong demand at {occupancy_score}%.",
     ]
 
-    if property_record["walk_score"] >= 75:
-        drivers.append("Neighborhood accessibility is strong enough to support renter demand.")
+    if neighborhood_score >= 80:
+        drivers.append("Excellent neighborhood accessibility.")
 
     return {
         "property_id": property_record["id"],
@@ -79,6 +94,16 @@ def valuation_for(property_record: dict) -> dict:
             "momentum, and high occupancy. It is an explainable scoring model, not a guarantee."
         ),
         "drivers": drivers,
+        "factor_breakdown": {
+            "rent_growth": rent_growth_score,
+            "value_growth": value_growth_score,
+            "occupancy": occupancy_score,
+            "neighborhood": neighborhood_score,
+        },
+        "market_metrics": {
+            "occupancy_rate": round(occupancy_rate * 100),
+            "neighborhood_score": neighborhood_score,
+        },
     }
 
 
@@ -107,11 +132,16 @@ def list_properties() -> dict:
             {
                 "id": property_record["id"],
                 "name": property_record["name"],
+                "address": property_record["address"],
                 "city": property_record["city"],
                 "state": property_record["state"],
                 "neighborhood": property_record["neighborhood"],
                 "bedrooms": property_record["bedrooms"],
+                "bathrooms": property_record["bathrooms"],
+                "square_feet": property_record["square_feet"],
                 "monthly_rent": property_record["monthly_rent"],
+                "estimated_value": property_record["estimated_value"],
+                "market_history": property_record["market_history"],
             }
         )
 
