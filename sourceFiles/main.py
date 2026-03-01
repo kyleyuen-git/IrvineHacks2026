@@ -132,3 +132,6 @@ for epoch in range(200):
 print("X:", X.shape)  # should be (N, 12)
 print("y:", y.shape)  # should be (N, 1)
 y = y.view(-1, 1)
+print("output(y):", y[-1]) # prints out the last, most accurate, output value
+# if you print out y, you get a massive 121x1 matrix that is related to the input 121x1 matrix
+# 121 rows of inputs and 12 nodes in each row of inputs
