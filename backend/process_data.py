@@ -18,14 +18,19 @@ def combine_more_data():
     full_df = pd.concat([full_df, df4])
     full_df = pd.concat([full_df, df5])
     full_df = full_df.reset_index(drop=True)
-    full_df.to_json("rent_listings/full_listings.json")
+    full_df.to_json("rent_listings/full_raw_listings.json")
     
 
 def filter_columns():
-    df = pd.read_json("rent_listings/full_listings.json")
-    df = df.loc[:,["id", "zipCode", "propertyType", "bedrooms", "bathrooms", "squareFootage", "lotSize", "yearBuilt", "price","listedDate"]]
+    df = pd.read_json("rent_listings/full_raw_listings.json")
+    df = df.loc[:,["id", "zipCode", "propertyType", "bedrooms", "bathrooms", "squareFootage", "price", "listedDate"]]
     print(df.columns)
-    df.dropna()
+    df = df.dropna()
+    df["listedDate"] = pd.to_datetime(df["listedDate"])
+    df["listedYear"] = df["listedDate"].dt.year
+    df["listedMonth"] = df["listedDate"].dt.month
+    df["listedDay"] = df["listedDate"].dt.day
+    df = df.drop("listedDate", axis=1)
     print(df.index)
     df.to_json("rent_listings/filtered_rent.json")
 
