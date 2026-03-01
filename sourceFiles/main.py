@@ -135,3 +135,30 @@ y = y.view(-1, 1)
 print("output(y):", y[-1]) # prints out the last, most accurate, output value
 # if you print out y, you get a massive 121x1 matrix that is related to the input 121x1 matrix
 # 121 rows of inputs and 12 nodes in each row of inputs
+
+# predict the next month (one-step ahead) by taking the most recent 12 months
+# model.eval()
+# with torch.no_grad():
+#     last_12 = torch.tensor(long[feature_cols].iloc[-1].values, dtype=torch.float32).view(1, -1)
+#     next_pred = model(last_12).item()
+#     print("Predicted next-month ZORI for Irvine:", next_pred)
+
+# Recursively predicts next month, then pretend that prediction is real data, slide the window forward, predict again, then repeats 12 times
+model.eval()
+# Start with the most recent 12 lag values (one input row)
+window = long[feature_cols].iloc[-1].values.tolist()  # list of 12 numbers
+predictions = []
+with torch.no_grad(): # Gradients are only needed for training
+    for step in range(12):
+        # Turn current window into a tensor shaped (1, 12)
+        x = torch.tensor(window, dtype=torch.float32).view(1, -1) # Reshapes it to one sample with 12 features shape (1, 12)
+
+        # Predict next month
+        next_value = model(x).item()
+        predictions.append(next_value)
+
+        # Slide the window forward:
+        # drop the oldest value and append the predicted next value
+        window = window[1:] + [next_value]
+
+print("Next 12 months predicted ZORI:", predictions)
