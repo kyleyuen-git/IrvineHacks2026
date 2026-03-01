@@ -20,11 +20,39 @@ const percentNumber = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2
 });
 
+const shortMonth = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  year: "2-digit"
+});
+
 const factorLabels = {
   yield: "Gross Yield",
   rent_signal: "Rent Signal",
   market_speed: "Market Speed",
   price_efficiency: "Price Efficiency"
+};
+
+const factorDescriptions = {
+  yield: {
+    summary: "Compares modeled annual rent to the current list price.",
+    high: "Higher scores mean the estimated rent looks stronger relative to acquisition cost.",
+    metricLabel: "Estimated gross yield"
+  },
+  rent_signal: {
+    summary: "Looks at modeled rent strength for the listing itself.",
+    high: "Higher scores mean the modeled rent signal is stronger for this home size and type.",
+    metricLabel: "Modeled monthly rent"
+  },
+  market_speed: {
+    summary: "Uses days on market as a rough signal of current demand and pricing pressure.",
+    high: "Higher scores mean the listing is moving faster in the market.",
+    metricLabel: "Days on market"
+  },
+  price_efficiency: {
+    summary: "Uses price per square foot as a rough cost-efficiency signal.",
+    high: "Higher scores mean the home looks more efficient on price per square foot.",
+    metricLabel: "Price per square foot"
+  }
 };
 
 const propertyTones = ["rose", "mint", "sky", "sand"];
@@ -54,6 +82,40 @@ function formatYield(value) {
   }
 
   return `${percentNumber.format(value)}%`;
+}
+
+function readStoredPage(key) {
+  if (typeof window === "undefined") {
+    return 1;
+  }
+
+  const value = Number(window.localStorage.getItem(key));
+  return Number.isInteger(value) && value > 0 ? value : 1;
+}
+
+function formatMonthLabel(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(`${value}-01T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : shortMonth.format(date);
+}
+
+function buildChartPath(points, width, height, minValue, maxValue) {
+  if (!points.length) {
+    return "";
+  }
+
+  const valueRange = maxValue - minValue || 1;
+
+  return points
+    .map((point, index) => {
+      const x = points.length === 1 ? width / 2 : (index / (points.length - 1)) * width;
+      const y = height - ((point.value - minValue) / valueRange) * height;
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
 }
 
 function ComparisonTable({ properties }) {
@@ -107,10 +169,15 @@ function RenterSelectionPanel({
   onSortModeChange,
   propertyTypes,
   filteredProperties,
+  totalResults,
   comparisonProperties,
   comparisonIds,
   onToggleComparison,
-  onSelectId
+  onSelectId,
+  currentPage,
+  totalPages,
+  onPreviousPage,
+  onNextPage
 }) {
   return (
     <section className="panel renter-comparison-panel reveal-on-scroll">
@@ -194,6 +261,32 @@ function RenterSelectionPanel({
           ))}
         </div>
       ) : null}
+      <div className="results-toolbar">
+        <p className="results-count">
+          Showing {filteredProperties.length} of {totalResults} matching listings
+        </p>
+        <div className="pagination-bar">
+          <button
+            type="button"
+            className="pagination-button"
+            onClick={onPreviousPage}
+            disabled={currentPage <= 1}
+          >
+            Previous
+          </button>
+          <span className="pagination-status">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            type="button"
+            className="pagination-button"
+            onClick={onNextPage}
+            disabled={currentPage >= totalPages}
+          >
+            Next
+          </button>
+        </div>
+      </div>
       <div className="renter-selection-results">
         {filteredProperties.map((property) => (
           <article className={`renter-result-row ${comparisonIds.includes(property.id) ? "selected" : ""}`} key={property.id}>
@@ -221,12 +314,25 @@ function RenterSelectionPanel({
 function FactorBreakdown({ forecast, activeFactor, onSelectFactor }) {
   const activeLabel = factorLabels[activeFactor];
   const activeValue = forecast.factor_breakdown[activeFactor];
+  const activeDescription = factorDescriptions[activeFactor];
+  const metrics = forecast.market_metrics ?? {};
+
+  let activeMetricValue = "Unavailable";
+  if (activeFactor === "yield" && metrics.gross_yield_pct != null) {
+    activeMetricValue = formatYield(metrics.gross_yield_pct);
+  } else if (activeFactor === "rent_signal" && metrics.predicted_monthly_rent != null) {
+    activeMetricValue = `${currency.format(metrics.predicted_monthly_rent)}/mo`;
+  } else if (activeFactor === "market_speed" && metrics.days_on_market != null) {
+    activeMetricValue = `${metrics.days_on_market} days`;
+  } else if (activeFactor === "price_efficiency" && metrics.price_per_sqft != null) {
+    activeMetricValue = `${currency.format(metrics.price_per_sqft)}/sqft`;
+  }
 
   return (
     <section className="panel factor-breakdown-panel reveal-on-scroll">
       <div className="panel-heading">
-        <p className="eyebrow">Score factors</p>
-        <h2>Listing score breakdown</h2>
+        <p className="eyebrow">Signal breakdown</p>
+        <h2>How the listing score is constructed</h2>
       </div>
       <div className="factor-scale">
         <span>0</span>
@@ -256,21 +362,167 @@ function FactorBreakdown({ forecast, activeFactor, onSelectFactor }) {
         <p className="card-label">Focused factor</p>
         <strong>{activeLabel}</strong>
         <span>{activeValue}/100</span>
+        <p className="factor-focus-summary">{activeDescription.summary}</p>
+        <div className="factor-focus-metric">
+          <span>{activeDescription.metricLabel}</span>
+          <strong>{activeMetricValue}</strong>
+        </div>
+        <p className="factor-focus-detail">{activeDescription.high}</p>
+        <p className="factor-focus-note">
+          These values are deterministic screening scores, not confidence or probability measures.
+        </p>
       </div>
     </section>
   );
 }
 
+function MarketForecastPanel({ forecast }) {
+  const actualSeries = forecast?.actual ?? [];
+  const futureSeries = forecast?.forecast ?? [];
+  const warnings = forecast?.meta?.warnings ?? [];
+
+  const chartModel = useMemo(() => {
+    const actualWithType = actualSeries.map((point) => ({ ...point, type: "actual" }));
+    const forecastWithType = futureSeries.map((point) => ({ ...point, type: "forecast" }));
+    const combinedSeries = [...actualWithType, ...forecastWithType];
+
+    if (!combinedSeries.length) {
+      return null;
+    }
+
+    const values = combinedSeries.map((point) => point.value);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const chartHeight = 260;
+    const chartWidth = 720;
+    const actualPath = buildChartPath(actualWithType, chartWidth, chartHeight, minValue, maxValue);
+    const forecastPath = buildChartPath(
+      actualWithType.length ? [actualWithType.at(-1), ...forecastWithType] : forecastWithType,
+      chartWidth,
+      chartHeight,
+      minValue,
+      maxValue
+    );
+    const yTicks = Array.from({ length: 4 }, (_, index) => {
+      const ratio = index / 3;
+      const value = maxValue - (maxValue - minValue) * ratio;
+      return currency.format(value);
+    });
+    const labelStride = combinedSeries.length > 12 ? 3 : 2;
+    const xLabels = combinedSeries.map((point, index) => {
+      const shouldShow =
+        index === 0 || index === combinedSeries.length - 1 || index === actualWithType.length - 1 || index % labelStride === 0;
+      return shouldShow ? formatMonthLabel(point.month) : "";
+    });
+
+    return {
+      actualPath,
+      forecastPath,
+      combinedSeries,
+      xLabels,
+      yTicks
+    };
+  }, [actualSeries, futureSeries]);
+
+  return (
+    <section className="panel landlord-forecast-panel reveal-on-scroll landlord-grid-span">
+      <div className="panel-heading">
+        <p className="eyebrow">Market rent forecast</p>
+        <h2>Irvine rent trend with 12 projected months</h2>
+      </div>
+      <p className="market-forecast-summary">
+        This chart uses the available market-history series to show recent actual rent levels and a
+        forward-looking PyTorch lag forecast for landlord mode.
+      </p>
+      {chartModel ? (
+        <>
+          <div className="chart-stage">
+            <div className="chart-axis chart-axis-y">
+              {chartModel.yTicks.map((label) => (
+                <span key={label}>{label}</span>
+              ))}
+            </div>
+            <div className="chart-main landlord-chart-main">
+              <svg
+                className="comparison-chart market-forecast-chart"
+                viewBox="0 0 720 260"
+                role="img"
+                aria-label="Irvine market rent forecast line chart"
+              >
+                {[64, 128, 192].map((y) => (
+                  <line
+                    key={y}
+                    x1="0"
+                    y1={y}
+                    x2="720"
+                    y2={y}
+                    className="market-grid-line"
+                  />
+                ))}
+                <path d={chartModel.actualPath} className="market-forecast-line actual" />
+                <path d={chartModel.forecastPath} className="market-forecast-line forecast" />
+              </svg>
+              <div className="chart-axis chart-axis-x landlord-chart-axis-x">
+                {chartModel.xLabels.map((label, index) => (
+                  <span key={`${chartModel.combinedSeries[index]?.month}-${index}`}>{label}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="chart-legend">
+            <span>
+              <i className="market-legend-dot actual" />
+              Recent actual
+            </span>
+            <span>
+              <i className="market-legend-dot forecast" />
+              12-month forecast
+            </span>
+            <span>
+              <i className="market-legend-dot note" />
+              {forecast?.meta?.method === "pytorch-lag-network"
+                ? `Lag ${forecast.meta.lag_size} model${forecast.meta.validation_mae != null ? ` · Val MAE ${currency.format(forecast.meta.validation_mae)}` : ""}`
+                : "Fallback persistence forecast"}
+            </span>
+          </div>
+        </>
+      ) : (
+        <p className="chart-empty">Market forecast data is not available yet.</p>
+      )}
+      {warnings.length ? <p className="market-forecast-warning">{warnings.join(" ")}</p> : null}
+    </section>
+  );
+}
+
 function InvestorControlPanel({
+  rankedListings,
   listings,
+  totalListings,
   propertyTypes,
   investorTypeFilter,
   onInvestorTypeFilterChange,
   investorSortMode,
   onInvestorSortModeChange,
   investorMaxDom,
-  onInvestorMaxDomChange
+  onInvestorMaxDomChange,
+  currentPage,
+  totalPages,
+  onPreviousPage,
+  onNextPage
 }) {
+  const topYieldListing = rankedListings.find((listing) => listing.gross_yield_pct != null) ?? rankedListings[0];
+  const fastestListing = [...rankedListings].sort(
+    (left, right) => (left.days_on_market ?? Number.MAX_SAFE_INTEGER) - (right.days_on_market ?? Number.MAX_SAFE_INTEGER)
+  )[0];
+  const lowestPriceListing = [...rankedListings].sort(
+    (left, right) => (left.estimated_value ?? Number.MAX_SAFE_INTEGER) - (right.estimated_value ?? Number.MAX_SAFE_INTEGER)
+  )[0];
+  const coverageCount = rankedListings.filter((listing) => listing.monthly_rent != null).length;
+  const averageYield =
+    rankedListings.filter((listing) => listing.gross_yield_pct != null).reduce((sum, listing, _, source) => {
+      return sum + (listing.gross_yield_pct ?? 0) / source.length;
+    }, 0) || null;
+
   return (
     <>
       <section className="panel investor-summary-panel reveal-on-scroll">
@@ -280,22 +532,63 @@ function InvestorControlPanel({
         </div>
         <div className="stats-grid compact">
           <article>
-            <span>Listings shown</span>
-            <strong>{listings.length}</strong>
+            <span>Filtered set</span>
+            <strong>{totalListings}</strong>
           </article>
           <article>
             <span>Highest yield</span>
-            <strong>{formatYield(listings[0]?.gross_yield_pct)}</strong>
+            <strong>{formatYield(topYieldListing?.gross_yield_pct)}</strong>
           </article>
           <article>
             <span>Fastest market</span>
-            <strong>{listings[0]?.days_on_market ?? "N/A"} days</strong>
+            <strong>{fastestListing?.days_on_market ?? "N/A"} days</strong>
           </article>
           <article>
-            <span>Coverage</span>
-            <strong>Real Irvine data</strong>
+            <span>Prediction coverage</span>
+            <strong>
+              {coverageCount}/{totalListings || 0}
+            </strong>
           </article>
         </div>
+        <div className="investor-insight-grid">
+          <article className="investor-insight-card">
+            <span className="investor-insight-label">Top yield listing</span>
+            <strong>{topYieldListing?.address ?? "Unavailable"}</strong>
+            <p>
+              {topYieldListing
+                ? `${formatYield(topYieldListing.gross_yield_pct)} estimated gross yield at ${currency.format(
+                    topYieldListing.estimated_value ?? 0
+                  )}.`
+                : "No yield-ranked listing is available in this filtered set."}
+            </p>
+          </article>
+          <article className="investor-insight-card">
+            <span className="investor-insight-label">Fastest mover</span>
+            <strong>{fastestListing?.address ?? "Unavailable"}</strong>
+            <p>
+              {fastestListing
+                ? `${fastestListing.days_on_market ?? "N/A"} days on market for a ${fastestListing.property_type?.toLowerCase() ?? "listing"}.`
+                : "No days-on-market signal is available in this filtered set."}
+            </p>
+          </article>
+          <article className="investor-insight-card">
+            <span className="investor-insight-label">Lowest entry price</span>
+            <strong>{lowestPriceListing?.address ?? "Unavailable"}</strong>
+            <p>
+              {lowestPriceListing
+                ? `${currency.format(lowestPriceListing.estimated_value ?? 0)} list price with ${
+                    lowestPriceListing.monthly_rent != null ? "model coverage" : "no rent estimate"
+                  }.`
+                : "No price-ranked listing is available in this filtered set."}
+            </p>
+          </article>
+        </div>
+        <p className="investor-market-read">
+          This filtered Irvine set averages{" "}
+          <strong>{averageYield != null ? formatYield(averageYield) : "no yield signal"}</strong>{" "}
+          and currently has rent-model coverage on <strong>{coverageCount}</strong> of{" "}
+          <strong>{totalListings}</strong> listings.
+        </p>
       </section>
 
       <section className="panel investor-list-panel reveal-on-scroll">
@@ -334,6 +627,32 @@ function InvestorControlPanel({
               <option value="dom_low">Lowest DOM</option>
             </select>
           </label>
+        </div>
+        <div className="results-toolbar">
+          <p className="results-count">
+            Showing {listings.length} of {totalListings} ranked listings
+          </p>
+          <div className="pagination-bar">
+            <button
+              type="button"
+              className="pagination-button"
+              onClick={onPreviousPage}
+              disabled={currentPage <= 1}
+            >
+              Previous
+            </button>
+            <span className="pagination-status">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              className="pagination-button"
+              onClick={onNextPage}
+              disabled={currentPage >= totalPages}
+            >
+              Next
+            </button>
+          </div>
         </div>
         <div className="investor-grid">
           {listings.map((listing) => (
@@ -380,11 +699,13 @@ function InvestorControlPanel({
 }
 
 function App() {
+  const PAGE_SIZE = 9;
   const [properties, setProperties] = useState([]);
   const [view, setView] = useState("intro");
   const [selectedId, setSelectedId] = useState(null);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [selectedForecast, setSelectedForecast] = useState(null);
+  const [marketForecast, setMarketForecast] = useState(null);
   const [comparisonIds, setComparisonIds] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [minPrice, setMinPrice] = useState("");
@@ -395,6 +716,8 @@ function App() {
   const [investorTypeFilter, setInvestorTypeFilter] = useState("all");
   const [investorSortMode, setInvestorSortMode] = useState("yield");
   const [investorMaxDom, setInvestorMaxDom] = useState("all");
+  const [renterPage, setRenterPage] = useState(() => readStoredPage("leaselens-renter-page"));
+  const [investorPage, setInvestorPage] = useState(() => readStoredPage("leaselens-investor-page"));
   const [activeFactor, setActiveFactor] = useState("yield");
   const [openFooterPanel, setOpenFooterPanel] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -423,6 +746,39 @@ function App() {
     }
 
     loadProperties();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMarketForecast() {
+      try {
+        const response = await fetch(`${API_BASE}/market-rent-forecast`);
+        if (!response.ok) {
+          throw new Error("Failed to load the market rent forecast.");
+        }
+
+        const data = await response.json();
+        if (active) {
+          setMarketForecast(data);
+        }
+      } catch (err) {
+        if (active) {
+          setMarketForecast({
+            meta: {
+              warnings: [err.message]
+            },
+            actual: [],
+            forecast: []
+          });
+        }
+      }
+    }
+
+    loadMarketForecast();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -478,6 +834,14 @@ function App() {
     [properties]
   );
 
+  const landlordProperties = useMemo(
+    () =>
+      [...properties].sort((left, right) =>
+        String(left.address ?? "").localeCompare(String(right.address ?? ""))
+      ),
+    [properties]
+  );
+
   const filteredRenterProperties = useMemo(() => {
     const normalizedQuery = searchTerm.trim().toLowerCase();
 
@@ -511,7 +875,7 @@ function App() {
       return String(right.listed_date ?? "").localeCompare(String(left.listed_date ?? ""));
     });
 
-    return filtered.slice(0, 12);
+    return filtered;
   }, [properties, searchTerm, minPrice, maxPrice, bedroomFilter, propertyTypeFilter, sortMode]);
 
   const comparisonProperties = useMemo(
@@ -548,9 +912,49 @@ function App() {
             );
           }
         )
-        .slice(0, 24),
+        ,
     [properties, investorTypeFilter, investorSortMode, investorMaxDom]
   );
+
+  const renterPageCount = Math.max(1, Math.ceil(filteredRenterProperties.length / PAGE_SIZE));
+  const visibleRenterProperties = useMemo(() => {
+    const start = (renterPage - 1) * PAGE_SIZE;
+    return filteredRenterProperties.slice(start, start + PAGE_SIZE);
+  }, [filteredRenterProperties, renterPage]);
+
+  const investorPageCount = Math.max(1, Math.ceil(featuredInvestorListings.length / PAGE_SIZE));
+  const visibleInvestorListings = useMemo(() => {
+    const start = (investorPage - 1) * PAGE_SIZE;
+    return featuredInvestorListings.slice(start, start + PAGE_SIZE);
+  }, [featuredInvestorListings, investorPage]);
+
+  useEffect(() => {
+    setRenterPage(1);
+  }, [searchTerm, minPrice, maxPrice, bedroomFilter, propertyTypeFilter, sortMode]);
+
+  useEffect(() => {
+    setInvestorPage(1);
+  }, [investorTypeFilter, investorSortMode, investorMaxDom]);
+
+  useEffect(() => {
+    setRenterPage((current) => Math.min(current, renterPageCount));
+  }, [renterPageCount]);
+
+  useEffect(() => {
+    setInvestorPage((current) => Math.min(current, investorPageCount));
+  }, [investorPageCount]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("leaselens-renter-page", String(renterPage));
+    }
+  }, [renterPage]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("leaselens-investor-page", String(investorPage));
+    }
+  }, [investorPage]);
 
   const bestComparisonFit = useMemo(() => {
     if (!comparisonProperties.length) {
@@ -698,8 +1102,8 @@ function App() {
               <p className="eyebrow">Real Irvine inventory</p>
               <h1>Use live Irvine listings across renter, landlord, and investor workflows.</h1>
               <p className="hero-text">
-                The app now uses active Irvine listing data with modeled rent, gross yield, list
-                price, and days-on-market instead of a hypothetical demo property set.
+                Explore active Irvine inventory with modeled rent, gross yield, list price, and
+                days on market in one decision-support workflow.
               </p>
               <div className="intro-actions">
                 <button type="button" className="intro-primary" onClick={() => setView("dashboard")}>
@@ -718,18 +1122,18 @@ function App() {
               </div>
             </div>
             <div className="intro-panel">
-              <p className="card-label">What changed</p>
+              <p className="card-label">How LeaseLens works</p>
               <div className="intro-feature-list">
                 <article>
-                  <span>Renter comparison</span>
+                  <span>For renters</span>
                   <strong>Compare real active Irvine listings by price, rent, yield, and DOM.</strong>
                 </article>
                 <article>
-                  <span>Landlord scoring</span>
+                  <span>For landlords</span>
                   <strong>Score one real listing using current market signals and modeled rent.</strong>
                 </article>
                 <article>
-                  <span>Investor board</span>
+                  <span>For investors</span>
                   <strong>Rank live Irvine opportunities by estimated gross yield.</strong>
                 </article>
               </div>
@@ -889,11 +1293,16 @@ function App() {
                     sortMode={sortMode}
                     onSortModeChange={setSortMode}
                     propertyTypes={propertyTypes}
-                    filteredProperties={filteredRenterProperties}
+                    filteredProperties={visibleRenterProperties}
+                    totalResults={filteredRenterProperties.length}
                     comparisonProperties={comparisonProperties}
                     comparisonIds={comparisonIds}
                     onToggleComparison={toggleComparison}
                     onSelectId={setSelectedId}
+                    currentPage={renterPage}
+                    totalPages={renterPageCount}
+                    onPreviousPage={() => setRenterPage((current) => Math.max(1, current - 1))}
+                    onNextPage={() => setRenterPage((current) => Math.min(renterPageCount, current + 1))}
                   />
 
                   <ComparisonTable properties={comparisonProperties} />
@@ -928,7 +1337,9 @@ function App() {
                 </>
               ) : mode === "investor" ? (
                 <InvestorControlPanel
-                  listings={featuredInvestorListings}
+                  rankedListings={featuredInvestorListings}
+                  listings={visibleInvestorListings}
+                  totalListings={featuredInvestorListings.length}
                   propertyTypes={propertyTypes}
                   investorTypeFilter={investorTypeFilter}
                   onInvestorTypeFilterChange={setInvestorTypeFilter}
@@ -936,6 +1347,10 @@ function App() {
                   onInvestorSortModeChange={setInvestorSortMode}
                   investorMaxDom={investorMaxDom}
                   onInvestorMaxDomChange={setInvestorMaxDom}
+                  currentPage={investorPage}
+                  totalPages={investorPageCount}
+                  onPreviousPage={() => setInvestorPage((current) => Math.max(1, current - 1))}
+                  onNextPage={() => setInvestorPage((current) => Math.min(investorPageCount, current + 1))}
                 />
               ) : selectedProperty && selectedForecast ? (
                 <>
@@ -952,7 +1367,7 @@ function App() {
                         value={selectedId ?? ""}
                         onChange={(event) => setSelectedId(event.target.value)}
                       >
-                        {properties.map((property) => (
+                        {landlordProperties.map((property) => (
                           <option key={property.id} value={property.id}>
                             {property.address}
                           </option>
@@ -976,9 +1391,9 @@ function App() {
                           <strong>{selectedForecast.investment_score}</strong>
                           <span>out of 100</span>
                         </div>
-                        <button type="button" className="forecast-decision">
-                          Review
-                        </button>
+                        <span className="forecast-decision" aria-label="Explainable screening score">
+                          Explainable
+                        </span>
                       </div>
                     </div>
                     <div className="panel-heading">
@@ -1022,6 +1437,8 @@ function App() {
                   </section>
 
                   <section className="landlord-bottom-grid">
+                    <MarketForecastPanel forecast={marketForecast} />
+
                     <FactorBreakdown
                       forecast={selectedForecast}
                       activeFactor={activeFactor}

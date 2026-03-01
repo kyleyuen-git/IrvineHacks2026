@@ -23,14 +23,22 @@ try:
 except ImportError:  # pragma: no cover - optional runtime dependency
     LabelEncoder = None
 
+try:
+    import torch
+except ImportError:  # pragma: no cover - optional runtime dependency
+    torch = None
+
 
 BASE_DIR = Path(__file__).parent
 DATA_PATH = BASE_DIR / "data" / "properties.json"
 ACTIVE_LISTINGS_PATH = BASE_DIR / "data" / "active_listings.json"
 FILTERED_RENT_PATH = BASE_DIR / "data" / "filtered_rent.json"
 RENT_MODEL_PATH = BASE_DIR / "models" / "rent_model.joblib"
+MARKET_FORECAST_STEPS = 12
+MARKET_FORECAST_HISTORY = 12
 
 _investor_runtime: dict[str, Any] | None = None
+_market_forecast_runtime: dict[str, Any] | None = None
 
 
 def load_json(path: Path) -> Any:
@@ -179,6 +187,228 @@ def to_int(value: Any) -> int | None:
     if number is None:
         return None
     return int(round(number))
+
+
+def parse_market_month(value: Any) -> datetime | None:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m")
+    except ValueError:
+        return None
+
+
+def format_market_month(value: datetime) -> str:
+    return value.strftime("%Y-%m")
+
+
+def add_months(value: datetime, months: int) -> datetime:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    return datetime(year, month, 1)
+
+
+def load_market_rent_series() -> list[dict[str, Any]]:
+    monthly_values: dict[str, list[float]] = {}
+    for property_record in load_properties():
+        for point in property_record.get("market_history", []):
+            month = point.get("month")
+            rent_index = to_float(point.get("rent_index"))
+            if not month or rent_index is None:
+                continue
+            monthly_values.setdefault(month, []).append(rent_index)
+
+    series: list[dict[str, Any]] = []
+    for month in sorted(monthly_values):
+        values = monthly_values[month]
+        series.append(
+            {
+                "month": month,
+                "value": round(sum(values) / len(values), 2),
+            }
+        )
+    return series
+
+
+def build_persistence_forecast(actual_series: list[dict[str, Any]], warnings: list[str]) -> dict[str, Any]:
+    recent_actual = actual_series[-min(MARKET_FORECAST_HISTORY, len(actual_series)) :]
+    if not recent_actual:
+        return {
+            "meta": {
+                "model_ready": False,
+                "method": "unavailable",
+                "warnings": ["No market history is available for forecasting."],
+                "actual_points": 0,
+                "forecast_points": 0,
+            },
+            "actual": [],
+            "forecast": [],
+        }
+
+    last_point = recent_actual[-1]
+    last_date = parse_market_month(last_point["month"])
+    if last_date is None:
+        warnings.append("Market-history dates could not be parsed for forecasting.")
+        return {
+            "meta": {
+                "model_ready": False,
+                "method": "unavailable",
+                "warnings": warnings,
+                "actual_points": len(recent_actual),
+                "forecast_points": 0,
+            },
+            "actual": recent_actual,
+            "forecast": [],
+        }
+
+    forecast = [
+        {
+            "month": format_market_month(add_months(last_date, step)),
+            "value": round(float(last_point["value"]), 2),
+        }
+        for step in range(1, MARKET_FORECAST_STEPS + 1)
+    ]
+
+    return {
+        "meta": {
+            "model_ready": False,
+            "method": "persistence",
+            "warnings": warnings,
+            "actual_points": len(recent_actual),
+            "forecast_points": len(forecast),
+        },
+        "actual": recent_actual,
+        "forecast": forecast,
+    }
+
+
+def build_market_forecast() -> dict[str, Any]:
+    warnings: list[str] = []
+    actual_series = load_market_rent_series()
+
+    if len(actual_series) < 2:
+        return build_persistence_forecast(actual_series, warnings)
+
+    if torch is None:
+        warnings.append("PyTorch is not installed. Showing a persistence forecast instead.")
+        return build_persistence_forecast(actual_series, warnings)
+
+    values = [float(point["value"]) for point in actual_series]
+    lag_size = min(12, max(2, len(values) - 1))
+    if len(values) <= lag_size:
+        warnings.append("Not enough history to train the neural forecast. Showing a persistence forecast instead.")
+        return build_persistence_forecast(actual_series, warnings)
+
+    mean_value = sum(values) / len(values)
+    variance = sum((value - mean_value) ** 2 for value in values) / len(values)
+    std_value = variance ** 0.5 or 1.0
+    normalized_values = [(value - mean_value) / std_value for value in values]
+
+    features: list[list[float]] = []
+    targets: list[float] = []
+    for index in range(lag_size, len(normalized_values)):
+        features.append(normalized_values[index - lag_size : index])
+        targets.append(normalized_values[index])
+
+    if not features:
+        warnings.append("Unable to build lagged training samples. Showing a persistence forecast instead.")
+        return build_persistence_forecast(actual_series, warnings)
+
+    torch.manual_seed(7)
+
+    class MarketForecastNN(torch.nn.Module):
+        def __init__(self, input_dim: int):
+            super().__init__()
+            self.layer1 = torch.nn.Linear(input_dim, 32)
+            self.layer2 = torch.nn.Linear(32, 16)
+            self.layer3 = torch.nn.Linear(16, 1)
+
+        def forward(self, x):
+            x = torch.relu(self.layer1(x))
+            x = torch.relu(self.layer2(x))
+            return self.layer3(x)
+
+    model = MarketForecastNN(lag_size)
+    inputs = torch.tensor(features, dtype=torch.float32)
+    outputs = torch.tensor(targets, dtype=torch.float32).view(-1, 1)
+
+    split_index = max(1, int(len(features) * 0.8))
+    if split_index >= len(features):
+        split_index = len(features) - 1
+
+    if split_index <= 0:
+        warnings.append("Forecast sample size is too small to validate. Showing a persistence forecast instead.")
+        return build_persistence_forecast(actual_series, warnings)
+
+    train_inputs = inputs[:split_index]
+    train_outputs = outputs[:split_index]
+    validation_inputs = inputs[split_index:]
+    validation_outputs = outputs[split_index:]
+
+    criterion = torch.nn.L1Loss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    for _ in range(240):
+        model.train()
+        optimizer.zero_grad()
+        predictions = model(train_inputs)
+        loss = criterion(predictions, train_outputs)
+        loss.backward()
+        optimizer.step()
+
+    validation_mae = None
+    if len(validation_inputs):
+        model.eval()
+        with torch.no_grad():
+            validation_predictions = model(validation_inputs).view(-1)
+            mae = torch.mean(torch.abs(validation_predictions - validation_outputs.view(-1))).item()
+            validation_mae = round(mae * std_value, 2)
+
+    recent_actual = actual_series[-min(MARKET_FORECAST_HISTORY, len(actual_series)) :]
+    last_date = parse_market_month(actual_series[-1]["month"])
+    if last_date is None:
+        warnings.append("Market-history dates could not be parsed for neural forecasting.")
+        return build_persistence_forecast(actual_series, warnings)
+
+    rolling_window = normalized_values[-lag_size:]
+    forecast: list[dict[str, Any]] = []
+
+    model.eval()
+    with torch.no_grad():
+        for step in range(1, MARKET_FORECAST_STEPS + 1):
+            model_input = torch.tensor([rolling_window], dtype=torch.float32)
+            predicted_normalized = float(model(model_input).item())
+            predicted_value = round(predicted_normalized * std_value + mean_value, 2)
+            forecast.append(
+                {
+                    "month": format_market_month(add_months(last_date, step)),
+                    "value": predicted_value,
+                }
+            )
+            rolling_window = [*rolling_window[1:], predicted_normalized]
+
+    return {
+        "meta": {
+            "model_ready": True,
+            "method": "pytorch-lag-network",
+            "lag_size": lag_size,
+            "training_points": len(features),
+            "actual_points": len(recent_actual),
+            "forecast_points": len(forecast),
+            "validation_mae": validation_mae,
+            "warnings": warnings,
+        },
+        "actual": recent_actual,
+        "forecast": forecast,
+    }
+
+
+def get_market_forecast() -> dict[str, Any]:
+    global _market_forecast_runtime
+    if _market_forecast_runtime is None:
+        _market_forecast_runtime = build_market_forecast()
+    return _market_forecast_runtime
 
 
 def build_listing_features(listing: dict) -> dict[str, Any] | None:
@@ -476,6 +706,11 @@ def property_valuation(property_id: str) -> dict:
             return valuation_for_real_property(property_record)
 
     raise HTTPException(status_code=404, detail="Property not found")
+
+
+@app.get("/api/market-rent-forecast")
+def market_rent_forecast() -> dict:
+    return get_market_forecast()
 
 
 @app.get("/api/investor/listings")

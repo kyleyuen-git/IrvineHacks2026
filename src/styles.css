@@ -64,15 +64,22 @@ input {
 .site-header-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--ink);
   text-decoration: none;
   font-weight: 700;
 }
 
+.site-header-brand span {
+  font-size: 1.28rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+}
+
 .site-header-logo {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   display: block;
   flex-shrink: 0;
   object-fit: contain;
@@ -208,7 +215,7 @@ input {
 .intro-brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   text-decoration: none;
   color: var(--ink);
   font-size: 1.2rem;
@@ -216,9 +223,16 @@ input {
   margin-bottom: 28px;
 }
 
+.intro-brand span {
+  font-size: 1.72rem;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+}
+
 .intro-logo {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   display: block;
   object-fit: contain;
   flex-shrink: 0;
@@ -670,12 +684,16 @@ h2 {
 }
 
 .forecast-decision {
-  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   padding: 10px 20px;
   background: linear-gradient(135deg, var(--accent), #e8a4b2);
   color: white;
   font-weight: 700;
+  cursor: default;
+  user-select: none;
 }
 
 .landlord-disclaimer {
@@ -687,6 +705,63 @@ h2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 22px;
+}
+
+.landlord-grid-span {
+  grid-column: 1 / -1;
+}
+
+.landlord-forecast-panel {
+  overflow: hidden;
+}
+
+.landlord-chart-main {
+  position: relative;
+}
+
+.market-forecast-summary,
+.market-forecast-warning,
+.chart-empty {
+  color: var(--muted);
+}
+
+.market-forecast-warning {
+  margin: 14px 0 0;
+}
+
+.market-grid-line {
+  stroke: rgba(117, 137, 161, 0.18);
+  stroke-width: 1;
+}
+
+.market-forecast-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
+  animation: market-line-draw 1.4s ease forwards;
+}
+
+.market-forecast-line.actual {
+  stroke: #d88b9a;
+}
+
+.market-forecast-line.forecast {
+  stroke: #5d8f74;
+}
+
+.market-legend-dot.actual {
+  background: #d88b9a;
+}
+
+.market-legend-dot.forecast {
+  background: #5d8f74;
+}
+
+.market-legend-dot.note {
+  background: rgba(117, 137, 161, 0.32);
 }
 
 .landlord-chart-axis-x {
@@ -754,11 +829,50 @@ h2 {
 .factor-focus-card {
   margin-top: 16px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(255, 246, 248, 0.96), rgba(244, 249, 255, 0.9));
+  border: 1px solid rgba(117, 137, 161, 0.12);
 }
 
 .factor-focus-card strong {
   font-size: 1.2rem;
+}
+
+.factor-focus-summary,
+.factor-focus-detail,
+.factor-focus-note {
+  margin: 0;
+}
+
+.factor-focus-summary,
+.factor-focus-detail {
+  color: var(--ink);
+}
+
+.factor-focus-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(117, 137, 161, 0.1);
+}
+
+.factor-focus-metric span,
+.factor-focus-note {
+  color: var(--muted);
+}
+
+.factor-focus-metric strong {
+  font-size: 1rem;
+}
+
+.factor-focus-note {
+  font-size: 0.9rem;
 }
 
 .renter-comparison-panel,
@@ -824,6 +938,56 @@ h2 {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 18px;
+}
+
+.results-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.results-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.pagination-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagination-button {
+  border: 1px solid rgba(117, 137, 161, 0.16);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    opacity 140ms ease;
+}
+
+.pagination-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(216, 139, 154, 0.34);
+}
+
+.pagination-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination-status {
+  min-width: 84px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .selection-chip {
@@ -1058,6 +1222,12 @@ h2 {
   gap: 10px;
 }
 
+@keyframes market-line-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 .comparison-table-row {
   display: grid;
   grid-template-columns: 2fr 0.8fr 0.9fr 0.7fr;
@@ -1285,6 +1455,46 @@ h2 {
     var(--panel);
 }
 
+.investor-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.investor-insight-card {
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(117, 137, 161, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+  display: grid;
+  gap: 8px;
+}
+
+.investor-insight-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.investor-insight-card strong {
+  color: var(--ink);
+  font-size: 1.06rem;
+  letter-spacing: -0.02em;
+}
+
+.investor-insight-card p,
+.investor-market-read {
+  margin: 0;
+  color: var(--muted);
+}
+
+.investor-market-read {
+  margin-top: 16px;
+  max-width: 70ch;
+}
+
 .investor-warning-list {
   margin-top: 18px;
 }
@@ -1344,6 +1554,11 @@ h2 {
     filter: none;
     transition: none;
   }
+
+  .market-forecast-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
 }
 
 @media (max-width: 980px) {
@@ -1362,7 +1577,8 @@ h2 {
   .renter-filter-grid,
   .comparison-property-list,
   .landlord-bottom-grid,
-  .investor-grid {
+  .investor-grid,
+  .investor-insight-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1402,7 +1618,8 @@ h2 {
   .hero-actions,
   .property-metrics,
   .landlord-overview-top,
-  .landlord-chart-detail {
+  .landlord-chart-detail,
+  .results-toolbar {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1420,6 +1637,7 @@ h2 {
   .landlord-bottom-grid,
   .factor-row,
   .investor-grid,
+  .investor-insight-grid,
   .investor-card-metrics {
     grid-template-columns: 1fr;
   }
