@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import leaseLensLogo from "./assets/leaselens-logo.svg";
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
