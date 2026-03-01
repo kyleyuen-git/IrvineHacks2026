@@ -1,18 +1,45 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+try:
+    import joblib
+except ImportError:  # pragma: no cover - optional runtime dependency
+    joblib = None
 
-DATA_PATH = Path(__file__).parent / "data" / "properties.json"
+try:
+    import pandas as pd
+except ImportError:  # pragma: no cover - optional runtime dependency
+    pd = None
+
+try:
+    from sklearn.preprocessing import LabelEncoder
+except ImportError:  # pragma: no cover - optional runtime dependency
+    LabelEncoder = None
+
+
+BASE_DIR = Path(__file__).parent
+DATA_PATH = BASE_DIR / "data" / "properties.json"
+ACTIVE_LISTINGS_PATH = BASE_DIR / "data" / "active_listings.json"
+FILTERED_RENT_PATH = BASE_DIR / "data" / "filtered_rent.json"
+RENT_MODEL_PATH = BASE_DIR / "models" / "rent_model.joblib"
+
+_investor_runtime: dict[str, Any] | None = None
+
+
+def load_json(path: Path) -> Any:
+    with path.open("r", encoding="utf-8") as source:
+        return json.load(source)
 
 
 def load_properties() -> list[dict]:
-    with DATA_PATH.open("r", encoding="utf-8") as source:
-        return json.load(source)
+    return load_json(DATA_PATH)
 
 
 def growth_rate(history: list[dict], key: str) -> float:
@@ -107,6 +134,309 @@ def valuation_for(property_record: dict) -> dict:
     }
 
 
+def load_column_oriented_json(path: Path) -> list[dict]:
+    payload = load_json(path)
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict) or not payload:
+        return []
+
+    first_column = next(iter(payload.values()))
+    if not isinstance(first_column, dict):
+        return []
+
+    row_ids = list(first_column.keys())
+    rows: list[dict] = []
+    for row_id in row_ids:
+        row = {}
+        for column, values in payload.items():
+            if isinstance(values, dict):
+                row[column] = values.get(row_id)
+        rows.append(row)
+    return rows
+
+
+def parse_listing_date(value: Any) -> datetime | None:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def to_int(value: Any) -> int | None:
+    number = to_float(value)
+    if number is None:
+        return None
+    return int(round(number))
+
+
+def build_listing_features(listing: dict) -> dict[str, Any] | None:
+    listed_date = parse_listing_date(listing.get("listedDate"))
+    zip_code = to_int(listing.get("zipCode"))
+    bedrooms = to_float(listing.get("bedrooms"))
+    bathrooms = to_float(listing.get("bathrooms"))
+    square_footage = to_float(listing.get("squareFootage"))
+    property_type = listing.get("propertyType")
+
+    if not listed_date or zip_code is None or not property_type:
+        return None
+    if bedrooms is None or bathrooms is None or square_footage is None:
+        return None
+
+    return {
+        "zipCode": zip_code,
+        "propertyType": property_type,
+        "bedrooms": bedrooms,
+        "bathrooms": bathrooms,
+        "squareFootage": square_footage,
+        "listedYear": listed_date.year,
+        "listedMonth": listed_date.month,
+        "listedDay": listed_date.day,
+    }
+
+
+def build_investor_runtime() -> dict[str, Any]:
+    warnings: list[str] = []
+    runtime: dict[str, Any] = {
+        "warnings": warnings,
+        "active_listings": [],
+        "model_ready": False,
+        "active_listings_ready": False,
+        "encoders_ready": False,
+    }
+
+    if not ACTIVE_LISTINGS_PATH.exists():
+        warnings.append("Missing backend/data/active_listings.json.")
+        return runtime
+
+    runtime["active_listings"] = load_column_oriented_json(ACTIVE_LISTINGS_PATH)
+    runtime["active_listings_ready"] = True
+
+    if joblib is None or pd is None or LabelEncoder is None:
+        warnings.append("Model dependencies are not installed.")
+        return runtime
+
+    if not FILTERED_RENT_PATH.exists():
+        warnings.append("Missing backend/data/filtered_rent.json.")
+        return runtime
+
+    if not RENT_MODEL_PATH.exists():
+        warnings.append("Missing backend/models/rent_model.joblib.")
+        return runtime
+
+    filtered_rent = pd.read_json(FILTERED_RENT_PATH)
+    property_encoder = LabelEncoder()
+    property_encoder.fit(filtered_rent["propertyType"])
+
+    zip_encoder = LabelEncoder()
+    zip_encoder.fit(filtered_rent["zipCode"])
+
+    runtime["model"] = joblib.load(RENT_MODEL_PATH)
+    runtime["property_encoder"] = property_encoder
+    runtime["zip_encoder"] = zip_encoder
+    runtime["encoders_ready"] = True
+    runtime["model_ready"] = True
+    return runtime
+
+
+def get_investor_runtime() -> dict[str, Any]:
+    global _investor_runtime
+    if _investor_runtime is None:
+        _investor_runtime = build_investor_runtime()
+    return _investor_runtime
+
+
+def predict_rent(listing: dict, runtime: dict[str, Any]) -> float | None:
+    if not runtime.get("model_ready"):
+        return None
+
+    features = build_listing_features(listing)
+    if features is None:
+        return None
+
+    property_encoder = runtime["property_encoder"]
+    zip_encoder = runtime["zip_encoder"]
+
+    property_type = features["propertyType"]
+    zip_code = features["zipCode"]
+    if property_type not in property_encoder.classes_:
+        return None
+    if zip_code not in zip_encoder.classes_:
+        return None
+
+    row = {
+        "zipCode": int(zip_encoder.transform([zip_code])[0]),
+        "bedrooms": features["bedrooms"],
+        "bathrooms": features["bathrooms"],
+        "squareFootage": features["squareFootage"],
+        "listedYear": features["listedYear"],
+        "listedMonth": features["listedMonth"],
+        "listedDay": features["listedDay"],
+        "propertyTypeNum": int(property_encoder.transform([property_type])[0]),
+    }
+
+    frame = pd.DataFrame([row])
+    prediction = runtime["model"].predict(frame)[0]
+    return round(float(prediction), 2)
+
+
+def serialize_investor_listing(listing: dict, runtime: dict[str, Any]) -> dict:
+    predicted_rent = predict_rent(listing, runtime)
+    price = to_float(listing.get("price"))
+    gross_yield = None
+    if predicted_rent is not None and price and price > 0:
+        gross_yield = round((predicted_rent * 12 / price) * 100, 2)
+
+    return {
+        "id": listing.get("id"),
+        "formatted_address": listing.get("formattedAddress"),
+        "city": listing.get("city"),
+        "state": listing.get("state"),
+        "zip_code": listing.get("zipCode"),
+        "property_type": listing.get("propertyType"),
+        "bedrooms": listing.get("bedrooms"),
+        "bathrooms": listing.get("bathrooms"),
+        "square_feet": listing.get("squareFootage"),
+        "list_price": listing.get("price"),
+        "listed_date": listing.get("listedDate"),
+        "days_on_market": listing.get("daysOnMarket"),
+        "status": listing.get("status"),
+        "builder": listing.get("builder"),
+        "predicted_monthly_rent": predicted_rent,
+        "estimated_gross_yield_pct": gross_yield,
+        "prediction_ready": predicted_rent is not None,
+    }
+
+
+def build_renter_takeaway(predicted_rent: float | None, gross_yield: float | None, days_on_market: Any) -> str:
+    dom = to_int(days_on_market) or 0
+
+    if predicted_rent is None:
+        return "Modeled rent is unavailable for this listing, so compare it on price, size, and days on market."
+    if gross_yield is not None and gross_yield >= 4.2 and dom <= 14:
+        return "This listing pairs strong modeled rent efficiency with fresh market activity, which makes it stand out in Irvine."
+    if gross_yield is not None and gross_yield >= 3.7:
+        return "This listing looks relatively efficient for Irvine on modeled rent versus list price."
+    if dom >= 45:
+        return "This listing has lingered longer on market, so there may be more room to negotiate."
+
+    return "This listing sits closer to the middle of the current Irvine market on rent efficiency and market speed."
+
+
+def build_real_property_record(listing: dict, runtime: dict[str, Any]) -> dict:
+    investor_listing = serialize_investor_listing(listing, runtime)
+    gross_yield = investor_listing["estimated_gross_yield_pct"]
+    price = to_float(investor_listing["list_price"]) or 0
+    square_feet = to_float(investor_listing["square_feet"]) or 0
+    price_per_sqft = round(price / square_feet, 2) if price and square_feet else None
+
+    return {
+        "id": investor_listing["id"],
+        "name": listing.get("addressLine1") or investor_listing["formatted_address"],
+        "address": investor_listing["formatted_address"],
+        "city": investor_listing["city"],
+        "state": investor_listing["state"],
+        "zip_code": investor_listing["zip_code"],
+        "neighborhood": f"ZIP {investor_listing['zip_code']}",
+        "bedrooms": investor_listing["bedrooms"],
+        "bathrooms": investor_listing["bathrooms"],
+        "square_feet": investor_listing["square_feet"],
+        "monthly_rent": investor_listing["predicted_monthly_rent"],
+        "estimated_value": investor_listing["list_price"],
+        "days_on_market": investor_listing["days_on_market"],
+        "listed_date": investor_listing["listed_date"],
+        "status": investor_listing["status"],
+        "property_type": investor_listing["property_type"],
+        "builder": investor_listing["builder"],
+        "gross_yield_pct": gross_yield,
+        "price_per_sqft": price_per_sqft,
+        "prediction_ready": investor_listing["prediction_ready"],
+        "renter_takeaway": build_renter_takeaway(
+            investor_listing["predicted_monthly_rent"],
+            gross_yield,
+            investor_listing["days_on_market"],
+        ),
+    }
+
+
+def load_real_properties() -> list[dict]:
+    runtime = get_investor_runtime()
+    properties = [build_real_property_record(listing, runtime) for listing in runtime["active_listings"]]
+    properties.sort(key=lambda item: item.get("listed_date") or "", reverse=True)
+    return properties
+
+
+def valuation_for_real_property(property_record: dict) -> dict:
+    gross_yield = to_float(property_record.get("gross_yield_pct")) or 0
+    monthly_rent = to_float(property_record.get("monthly_rent")) or 0
+    square_feet = to_float(property_record.get("square_feet")) or 0
+    days_on_market = to_int(property_record.get("days_on_market")) or 0
+    price_per_sqft = to_float(property_record.get("price_per_sqft")) or 0
+    builder = property_record.get("builder") or {}
+
+    yield_score = max(1, min(99, round(gross_yield * 18)))
+    rent_signal_score = max(1, min(99, round(((monthly_rent / square_feet) * 18) if square_feet else 1)))
+    market_speed_score = max(1, min(99, round(99 - min(days_on_market, 90) * 0.9)))
+    price_efficiency_score = max(1, min(99, round(99 - min(price_per_sqft, 1400) / 14)))
+
+    score = (
+        yield_score * 0.34
+        + rent_signal_score * 0.24
+        + market_speed_score * 0.22
+        + price_efficiency_score * 0.20
+    )
+    investment_score = max(1, min(99, round(score)))
+    appreciation_probability = max(0.05, min(0.95, round(investment_score / 100, 2)))
+
+    projected_value = round((property_record.get("estimated_value") or 0) * (1 + gross_yield / 100 * 0.35))
+    expected_gain = projected_value - (property_record.get("estimated_value") or 0)
+
+    drivers = [
+        f"Estimated gross yield is {gross_yield:.2f}% based on modeled rent versus current list price.",
+        f"Modeled monthly rent is {round(monthly_rent):,} for this {property_record.get('property_type', 'listing').lower()}.",
+        f"Days on market is {days_on_market}, which informs current market speed.",
+    ]
+
+    if builder.get("development"):
+        drivers.append(f"Builder inventory is tied to {builder['development']}.")
+
+    return {
+        "property_id": property_record["id"],
+        "investment_score": investment_score,
+        "appreciation_probability": appreciation_probability,
+        "projected_value_12m": projected_value,
+        "expected_gain_12m": expected_gain,
+        "summary": (
+            "This Irvine listing score is based on real active inventory, modeled rent, gross yield, "
+            "days on market, and price efficiency. It is product guidance, not investment advice."
+        ),
+        "drivers": drivers,
+        "factor_breakdown": {
+            "yield": yield_score,
+            "rent_signal": rent_signal_score,
+            "market_speed": market_speed_score,
+            "price_efficiency": price_efficiency_score,
+        },
+        "market_metrics": {
+            "predicted_monthly_rent": round(monthly_rent),
+            "gross_yield_pct": round(gross_yield, 2),
+            "days_on_market": days_on_market,
+            "price_per_sqft": round(price_per_sqft, 2),
+        },
+    }
+
+
 app = FastAPI(title="LeaseLens API", version="0.1.0")
 
 app.add_middleware(
@@ -125,35 +455,14 @@ def health() -> dict:
 
 @app.get("/api/properties")
 def list_properties() -> dict:
-    properties = load_properties()
-    trimmed = []
-    for property_record in properties:
-        trimmed.append(
-            {
-                "id": property_record["id"],
-                "name": property_record["name"],
-                "address": property_record["address"],
-                "city": property_record["city"],
-                "state": property_record["state"],
-                "neighborhood": property_record["neighborhood"],
-                "bedrooms": property_record["bedrooms"],
-                "bathrooms": property_record["bathrooms"],
-                "square_feet": property_record["square_feet"],
-                "monthly_rent": property_record["monthly_rent"],
-                "estimated_value": property_record["estimated_value"],
-                "market_history": property_record["market_history"],
-            }
-        )
-
-    return {"properties": trimmed}
+    return {"properties": load_real_properties()}
 
 
 @app.get("/api/properties/{property_id}")
 def property_details(property_id: str) -> dict:
-    properties = load_properties()
+    properties = load_real_properties()
     for property_record in properties:
         if property_record["id"] == property_id:
-            property_record["market_summary"] = summarize_market(property_record)
             return property_record
 
     raise HTTPException(status_code=404, detail="Property not found")
@@ -161,9 +470,48 @@ def property_details(property_id: str) -> dict:
 
 @app.get("/api/valuation/{property_id}")
 def property_valuation(property_id: str) -> dict:
-    properties = load_properties()
+    properties = load_real_properties()
     for property_record in properties:
         if property_record["id"] == property_id:
-            return valuation_for(property_record)
+            return valuation_for_real_property(property_record)
 
     raise HTTPException(status_code=404, detail="Property not found")
+
+
+@app.get("/api/investor/listings")
+def investor_listings(limit: int = 100) -> dict:
+    runtime = get_investor_runtime()
+    listings = [serialize_investor_listing(item, runtime) for item in runtime["active_listings"]]
+    listings.sort(key=lambda item: item.get("listed_date") or "", reverse=True)
+
+    safe_limit = max(1, min(limit, 500))
+    return {
+        "meta": {
+            "active_listings_ready": runtime["active_listings_ready"],
+            "model_ready": runtime["model_ready"],
+            "encoders_ready": runtime["encoders_ready"],
+            "warnings": runtime["warnings"],
+            "total": len(listings),
+            "returned": min(len(listings), safe_limit),
+        },
+        "listings": listings[:safe_limit],
+    }
+
+
+@app.get("/api/investor/listings/{listing_id}")
+def investor_listing_details(listing_id: str) -> dict:
+    runtime = get_investor_runtime()
+    for listing in runtime["active_listings"]:
+        if listing.get("id") == listing_id:
+            return {
+                "meta": {
+                    "active_listings_ready": runtime["active_listings_ready"],
+                    "model_ready": runtime["model_ready"],
+                    "encoders_ready": runtime["encoders_ready"],
+                    "warnings": runtime["warnings"],
+                },
+                "listing": serialize_investor_listing(listing, runtime),
+                "raw_listing": listing,
+            }
+
+    raise HTTPException(status_code=404, detail="Listing not found")

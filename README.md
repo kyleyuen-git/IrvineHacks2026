@@ -1,97 +1,153 @@
 # LeaseLens
 
-LeaseLens is a prototype rental intelligence app for two audiences:
+LeaseLens is a React + FastAPI housing workflow app built around real active Irvine listings.
 
-- Renters comparing properties using local rent and home-value history.
-- Landlords checking an explainable forecast score for whether a property is likely to gain value.
+The app supports three views over the same listing dataset:
 
-The current build uses a local sample dataset shaped after Zillow Research rental and home-value time series. The Zillow Research data portal referenced for future production ingestion is:
+- `Renter mode`: search, filter, and compare active Irvine listings
+- `Landlord mode`: score a single listing using modeled rent and current listing signals
+- `Investor mode`: rank active listings by estimated gross yield and market speed
 
-- https://www.zillow.com/research/data/
+## What Changed
+
+This project no longer depends on the original hypothetical demo workflow for the main user experience.
+
+The current app uses:
+
+- real active Irvine listing data from `backend/data/active_listings.json`
+- a trained rent model in `backend/models/rent_model.joblib`
+- encoder reconstruction data from `backend/data/filtered_rent.json`
+
+The backend still contains `backend/data/properties.json`, but the current renter and landlord flows are driven by the Irvine listing pipeline instead of the old demo records.
 
 ## Stack
 
-- Frontend: React + Vite + CSS
-- Backend: Python + FastAPI + Uvicorn
-- Data model: local JSON fixture that mirrors Zillow-style monthly history
+- Frontend: React + Vite
+- Backend: FastAPI + Uvicorn
+- Runtime data processing: pandas
+- Rent model inference: scikit-learn + joblib
 
-## Current product features
+## Product Modes
 
-### Renter mode
+### Renter Mode
 
-- Compare selected properties across 24 months of rent history
-- Compare selected properties across 24 months of home-value history
-- View a current-details comparison table with rent, value, and dollars per square foot
-- Focus a single property for a short renter-facing summary
+Renter mode is a comparison workflow over current Irvine inventory.
 
-### Landlord mode
+Features:
 
-- Select a property from an address dropdown
-- View property details, current rent, and estimated value
-- See an explainable investment forecast score
-- Inspect an interactive historical trend chart
-- Inspect a factor-by-factor score breakdown
-- Review key insights and market metrics
+- search by address or zip
+- filter by min/max price
+- filter by bedrooms
+- filter by property type
+- sort by newest, highest yield, lowest price, or highest modeled rent
+- select up to 4 listings to compare
+- compare selected listings by:
+  - list price
+  - modeled monthly rent
+  - estimated gross yield
+  - days on market
 
-## Demo dataset
+### Landlord Mode
 
-The current sample property set includes:
+Landlord mode evaluates one active Irvine listing at a time.
 
-- 742 Evergreen Terrace, San Francisco, CA
-- 1640 Riverside Drive, San Francisco, CA
-- 221B Baker Street, Oakland, CA
-- 4 Privet Drive, San Jose, CA
-- 124 Conch Street, Berkeley, CA
-- 1313 Mockingbird Lane, Palo Alto, CA
+Features:
 
-These are demo/sample records for product prototyping. They are not live Zillow-linked listings.
+- select a listing from a dropdown
+- inspect current listing facts:
+  - list price
+  - beds / baths
+  - square footage
+  - modeled rent
+  - estimated gross yield
+- view an explainable listing score
+- inspect factor breakdowns for:
+  - gross yield
+  - rent signal
+  - market speed
+  - price efficiency
 
-## Forecast formula
+### Investor Mode
 
-The landlord forecast is currently an explainable heuristic, not a trained AI model.
+Investor mode is a ranked board over the same real listing dataset.
 
-### Growth formulas
+Features:
 
-- `rent_growth = (last_rent_index - first_rent_index) / first_rent_index`
-- `value_growth = (last_home_value_index - first_home_value_index) / first_home_value_index`
+- filter by property type
+- filter by max days on market
+- sort by:
+  - highest yield
+  - newest
+  - lowest price
+  - lowest days on market
+- inspect builder/development metadata when available
 
-### Factor scores
+## Data Model
 
-- `rent_growth_score = clamp(round(rent_growth * 340), 1, 99)`
-- `value_growth_score = clamp(round(value_growth * 860), 1, 99)`
-- `occupancy_score = clamp(round(occupancy_rate * 100), 1, 99)`
-- `neighborhood_score = clamp(round(walk_score * 0.65 + transit_score * 0.35 + 7), 1, 99)`
+The current app combines:
 
-### Investment score
+### Real current listing data
 
-- `investment_score = clamp(round(rent_growth_score*0.16 + value_growth_score*0.28 + occupancy_score*0.24 + neighborhood_score*0.22 + 3), 1, 99)`
+From `backend/data/active_listings.json`:
 
-### Additional outputs
+- address
+- city / state / zip
+- bedrooms / bathrooms
+- square footage
+- list price
+- listed date
+- days on market
+- property type
+- status
+- builder metadata
 
-- `appreciation_probability = clamp(investment_score / 100, 0.05, 0.95)`
-- `projected_value_12m = estimated_value * (1 + value_growth*0.7 + rent_growth*0.3)`
-- `expected_gain_12m = projected_value_12m - estimated_value`
+### Modeled rent output
 
-## Variable meanings
+From `backend/models/rent_model.joblib`:
 
-- `rent_index`: historical monthly rent value
-- `home_value_index`: historical monthly home value
-- `occupancy_rate`: estimated occupancy share, for example `0.95 = 95%`
-- `walk_score`: neighborhood walkability score
-- `transit_score`: neighborhood transit access score
-- `estimated_value`: current estimated property value
+- predicted monthly rent
 
-## API contract
+### Derived metrics
 
-This is the current frontend/backend contract that should remain stable as real data and model code are integrated.
+Calculated in the backend from real data + modeled rent:
+
+- gross yield percentage
+- price per square foot
+- landlord listing score
+- factor breakdown
+
+## Important Accuracy Note
+
+This app is not "pure raw data only."
+
+It uses:
+
+- real listing inputs
+- predicted rent from a trained model
+- heuristic scoring derived from those inputs
+
+That means:
+
+- list price, sqft, DOM, property type, and builder data are factual listing fields
+- modeled rent, gross yield, and landlord score are computed outputs
+
+## Backend Files
+
+Main runtime files:
+
+- `backend/main.py`
+- `backend/requirements.txt`
+- `backend/data/active_listings.json`
+- `backend/data/filtered_rent.json`
+- `backend/models/rent_model.joblib`
+
+## API
 
 ### `GET /api/health`
 
-Purpose:
+Basic health endpoint.
 
-- basic backend health check
-
-Response:
+Example response:
 
 ```json
 {
@@ -101,262 +157,174 @@ Response:
 
 ### `GET /api/properties`
 
-Purpose:
+Returns the real Irvine listing objects used by renter and landlord mode.
 
-- returns the property list used by renter comparison cards and charts
-
-Response:
+Representative fields:
 
 ```json
 {
   "properties": [
     {
-      "id": "742-evergreen-terrace",
-      "name": "742 Evergreen Terrace",
-      "address": "742 Evergreen Terrace",
-      "city": "San Francisco",
+      "id": "185-Sash,-Irvine,-CA-92618",
+      "name": "185 Sash",
+      "address": "185 Sash, Irvine, CA 92618",
+      "city": "Irvine",
       "state": "CA",
-      "neighborhood": "Sunset District",
-      "bedrooms": 2,
-      "bathrooms": 2,
-      "square_feet": 1200,
-      "monthly_rent": 3800,
-      "estimated_value": 875000,
-      "occupancy_rate": 0.95,
-      "walk_score": 82,
-      "transit_score": 78,
-      "renter_takeaway": "Stable rent appreciation and strong transit access make this a dependable comparison anchor for renters who want a balanced San Francisco option.",
-      "market_history": [
-        {
-          "month": "2024-03",
-          "rent_index": 3320,
-          "home_value_index": 801000
-        }
-      ]
+      "zip_code": 92618,
+      "neighborhood": "ZIP 92618",
+      "bedrooms": 4,
+      "bathrooms": 4,
+      "square_feet": 2847,
+      "monthly_rent": 7132.54,
+      "estimated_value": 2298000,
+      "days_on_market": 12,
+      "listed_date": "2026-02-17T00:00:00.000Z",
+      "status": "Active",
+      "property_type": "Single Family",
+      "gross_yield_pct": 3.72,
+      "price_per_sqft": 807.27,
+      "prediction_ready": true,
+      "renter_takeaway": "This listing looks relatively efficient for Irvine on modeled rent versus list price."
     }
   ]
 }
 ```
 
-Required fields for frontend:
+### `GET /api/properties/{property_id}`
 
-- `id`
-- `name`
-- `address`
-- `city`
-- `state`
-- `bedrooms`
-- `bathrooms`
-- `square_feet`
-- `monthly_rent`
-- `estimated_value`
-- `occupancy_rate`
-- `walk_score`
-- `transit_score`
-- `renter_takeaway`
-- `market_history`
+Returns the full listing object for one Irvine property.
 
-### `GET /api/properties/:id`
+### `GET /api/valuation/{property_id}`
 
-Purpose:
+Returns the landlord scoring object for one real Irvine listing.
 
-- returns full property detail for the selected property
-
-Response:
+Representative response:
 
 ```json
 {
-  "id": "742-evergreen-terrace",
-  "name": "742 Evergreen Terrace",
-  "address": "742 Evergreen Terrace",
-  "city": "San Francisco",
-  "state": "CA",
-  "zip_code": "94102",
-  "neighborhood": "Sunset District",
-  "bedrooms": 2,
-  "bathrooms": 2,
-  "square_feet": 1200,
-  "monthly_rent": 3800,
-  "estimated_value": 875000,
-  "occupancy_rate": 0.95,
-  "walk_score": 82,
-  "transit_score": 78,
-  "renter_takeaway": "Stable rent appreciation and strong transit access make this a dependable comparison anchor for renters who want a balanced San Francisco option.",
-  "market_history": [
-    {
-      "month": "2024-03",
-      "rent_index": 3320,
-      "home_value_index": 801000
-    }
-  ],
-  "market_summary": {
-    "rent_growth_12m": 0.14,
-    "value_growth_12m": 0.09,
-    "risk_band": "Low"
-  }
-}
-```
-
-Required fields for frontend:
-
-- everything from `/api/properties`
-- plus:
-  - `zip_code`
-  - `market_summary.rent_growth_12m`
-  - `market_summary.value_growth_12m`
-  - `market_summary.risk_band`
-
-### `GET /api/valuation/:id`
-
-Purpose:
-
-- returns the landlord forecast object
-
-Response:
-
-```json
-{
-  "property_id": "742-evergreen-terrace",
-  "investment_score": 75,
-  "appreciation_probability": 0.75,
-  "projected_value_12m": 910000,
-  "expected_gain_12m": 35000,
-  "summary": "This prototype forecast favors markets with positive recent rent growth, positive home-value momentum, and high occupancy. It is an explainable scoring model, not a guarantee.",
+  "property_id": "185-Sash,-Irvine,-CA-92618",
+  "investment_score": 74,
+  "appreciation_probability": 0.74,
+  "projected_value_12m": 2328000,
+  "expected_gain_12m": 30000,
+  "summary": "This Irvine listing score is based on real active inventory, modeled rent, gross yield, days on market, and price efficiency. It is product guidance, not investment advice.",
   "drivers": [
-    "Strong rent growth at 4.9% annually.",
-    "Excellent home value appreciation at 7.9%.",
-    "High occupancy indicates strong demand at 95%.",
-    "Excellent neighborhood accessibility."
+    "Estimated gross yield is 3.72% based on modeled rent versus current list price.",
+    "Modeled monthly rent is 7,133 for this single family.",
+    "Days on market is 12, which informs current market speed."
   ],
   "factor_breakdown": {
-    "rent_growth": 49,
-    "value_growth": 79,
-    "occupancy": 95,
-    "neighborhood": 88
+    "yield": 67,
+    "rent_signal": 72,
+    "market_speed": 88,
+    "price_efficiency": 68
   },
   "market_metrics": {
-    "occupancy_rate": 95,
-    "neighborhood_score": 88
+    "predicted_monthly_rent": 7133,
+    "gross_yield_pct": 3.72,
+    "days_on_market": 12,
+    "price_per_sqft": 807.27
   }
 }
 ```
 
-Required fields for frontend:
+### `GET /api/investor/listings`
 
-- `property_id`
-- `investment_score`
-- `appreciation_probability`
-- `projected_value_12m`
-- `expected_gain_12m`
-- `summary`
-- `drivers`
-- `factor_breakdown.rent_growth`
-- `factor_breakdown.value_growth`
-- `factor_breakdown.occupancy`
-- `factor_breakdown.neighborhood`
-- `market_metrics.occupancy_rate`
-- `market_metrics.neighborhood_score`
+Returns the investor-mode listing board.
 
-### Contract rules
-
-- Do not remove or rename required fields without updating the frontend.
-- Adding extra fields is safe.
-- Model outputs should be added in new fields rather than replacing current ones immediately.
-- `market_history` entries should stay in this shape:
+Representative response:
 
 ```json
 {
-  "month": "YYYY-MM",
-  "rent_index": 0,
-  "home_value_index": 0
+  "meta": {
+    "active_listings_ready": true,
+    "model_ready": true,
+    "encoders_ready": true,
+    "warnings": [],
+    "total": 573,
+    "returned": 24
+  },
+  "listings": [
+    {
+      "id": "28-Brigmore-Aisle,-Irvine,-CA-92603",
+      "formatted_address": "28 Brigmore Aisle, Irvine, CA 92603",
+      "city": "Irvine",
+      "state": "CA",
+      "zip_code": 92603,
+      "property_type": "Condo",
+      "bedrooms": 3,
+      "bathrooms": 3.5,
+      "square_feet": 2547,
+      "list_price": 2085000,
+      "listed_date": "2026-02-28T00:00:00.000Z",
+      "days_on_market": 1,
+      "status": "Active",
+      "predicted_monthly_rent": 6639.31,
+      "estimated_gross_yield_pct": 3.82,
+      "prediction_ready": true
+    }
+  ]
 }
 ```
 
-## Project structure
+### `GET /api/investor/listings/{listing_id}`
 
-```text
-.
-├── backend
-│   ├── data/properties.json
-│   ├── main.py
-│   └── requirements.txt
-├── src
-│   ├── App.jsx
-│   ├── main.jsx
-│   └── styles.css
-├── index.html
-├── package.json
-└── vite.config.js
-```
+Returns one raw investor listing plus its serialized listing view.
 
-## Run locally
+## Local Development
 
-### Backend
+### 1. Start the backend
 
 ```bash
-cd /Users/mytruong/staging-planner
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r backend/requirements.txt
-uvicorn backend.main:app --reload
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn main:app --reload --port 8000
 ```
+
+### 2. Start the frontend
+
+From the repo root:
+
+```bash
+npm install
+npm run dev
+```
+
+The Vite app proxies `/api` to the backend.
+
+## Dependencies
 
 ### Frontend
 
-In a second terminal:
+From `package.json`:
 
-```bash
-cd /Users/mytruong/staging-planner
-npm install
-npm run dev
-```
+- `react`
+- `react-dom`
+- `vite`
+- `@vitejs/plugin-react`
 
-Open the Vite URL that prints in the terminal. The frontend now uses relative `/api` calls and Vite proxies them to the FastAPI backend during local development.
+### Backend
 
-## Teammate setup
+From `backend/requirements.txt`:
 
-For a new teammate to run the project locally, they need:
+- `fastapi==0.115.5`
+- `uvicorn[standard]==0.32.1`
+- `pandas==2.2.3`
+- `scikit-learn==1.5.2`
+- `joblib==1.4.2`
 
-- Node.js and npm
-- Python 3
+## Notes
 
-Then they run:
+- The app is currently tuned for local development.
+- The backend expects the Irvine listing JSON, filtered training JSON, and model file to exist locally.
+- If `active_listings.json`, `filtered_rent.json`, or `rent_model.joblib` are missing, investor/model-backed functionality will degrade or fail.
 
-```bash
-cd /path/to/staging-planner
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-npm install
-```
+## Future Improvements
 
-To start the app:
-
-```bash
-# terminal 1
-source .venv/bin/activate
-uvicorn backend.main:app --reload
-```
-
-```bash
-# terminal 2
-npm run dev
-```
-
-Important:
-
-- `localhost` only works on the same machine running the app
-- teammates cannot see your `localhost` from their computer unless they run the app themselves or you create a public deployment/tunnel
-
-## Notes on Zillow integration
-
-This repo does not pull Zillow data directly yet. The next backend step is to replace `backend/data/properties.json` with an ingestion pipeline that:
-
-1. Downloads the selected Zillow CSVs.
-2. Normalizes city/ZIP/metro identifiers.
-3. Joins the market history to landlord-owned properties.
-4. Recomputes the forecast features from the real data.
-
-## Important product note
-
-The current landlord recommendation is not actual AI or financial advice. It is an explainable heuristic based on recent rent growth, home-value growth, occupancy, and neighborhood accessibility.
+- replace the current rent model with a version that persists encoders cleanly
+- add details drawers/modals for renter and investor listing inspection
+- add map support
+- add more robust historical market sources for real non-simulated trend charts
+- separate truly factual listing views from predictive outputs more explicitly in the UI
