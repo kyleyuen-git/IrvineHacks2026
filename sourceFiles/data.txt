@@ -1,0 +1,25 @@
+import pandas as pd
+import re #re = regular expressions module. Regular expressions (regex) are patterns used to match strings.
+
+# Load CSV and separate date columns
+df = pd.read_csv("City_zori_uc_sfrcondomfr_sm_month.csv")
+
+date_cols = [c for c in df.columns if re.match(r"^\d{4}-\d{2}-\d{2}$", str(c))]
+meta_cols = [c for c in df.columns if c not in date_cols]
+
+print("meta:", meta_cols)
+print("num months:", len(date_cols), "first:", date_cols[0], "last:", date_cols[-1])
+
+# convert wide into long (city, date, zori)
+long = df.melt(
+    id_vars=["RegionName", "State"],   # keep only what you need
+    value_vars=date_cols,
+    var_name="date",
+    value_name="zori"
+)
+
+long["date"] = pd.to_datetime(long["date"])
+# dropna() removes remove missing values ( , ) from a DataFrame or Series. It allows you to drop rows or columns based on criteria like having any or all missing values
+long = long.dropna(subset=["zori"]).sort_values(["RegionName", "State", "date"]) 
+# example: (Irvine, CA, 2019-06-30, 2875.0)
+

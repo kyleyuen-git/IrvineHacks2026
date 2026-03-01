@@ -1,0 +1,45 @@
+import torch
+# x = torch.rand(5, 3)
+# print(x)
+import torch.nn as nn
+
+# What this means:
+# Input has 3 features (the input layer consists of 3 nodes (neurons), where each node receives one specific numerical variable or attribute from your dataset to make predictions)
+# Hidden layer has 10 neurons
+# Output has 1 value
+class SimpleNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layer1 = nn.Linear(3, 10)  # input 3 features → 10 neurons
+        self.layer2 = nn.Linear(10, 1)  # 10 → 1 output
+
+    def forward(self, x):
+        x = torch.relu(self.layer1(x))
+        x = self.layer2(x)
+        return x
+# Create model
+model = SimpleNN()
+
+# Pass fake data through it
+x = torch.rand(5, 3)   # 5 samples, 3 features each
+y = model(x)
+
+# print(y) # Now you have predictions
+
+# Train It (Basic Loop)
+criterion = nn.MSELoss()  # for regression
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+# fake target values
+target = torch.rand(5, 1)
+
+for epoch in range(100):
+    optimizer.zero_grad()
+    
+    output = model(x)
+    loss = criterion(output, target)
+    
+    loss.backward()   # compute gradients
+    optimizer.step()  # update weights
+
+# print("Final loss:", loss.item())
