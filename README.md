@@ -81,6 +81,197 @@ The landlord forecast is currently an explainable heuristic, not a trained AI mo
 - `transit_score`: neighborhood transit access score
 - `estimated_value`: current estimated property value
 
+## API contract
+
+This is the current frontend/backend contract that should remain stable as real data and model code are integrated.
+
+### `GET /api/health`
+
+Purpose:
+
+- basic backend health check
+
+Response:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### `GET /api/properties`
+
+Purpose:
+
+- returns the property list used by renter comparison cards and charts
+
+Response:
+
+```json
+{
+  "properties": [
+    {
+      "id": "742-evergreen-terrace",
+      "name": "742 Evergreen Terrace",
+      "address": "742 Evergreen Terrace",
+      "city": "San Francisco",
+      "state": "CA",
+      "neighborhood": "Sunset District",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "square_feet": 1200,
+      "monthly_rent": 3800,
+      "estimated_value": 875000,
+      "occupancy_rate": 0.95,
+      "walk_score": 82,
+      "transit_score": 78,
+      "renter_takeaway": "Stable rent appreciation and strong transit access make this a dependable comparison anchor for renters who want a balanced San Francisco option.",
+      "market_history": [
+        {
+          "month": "2024-03",
+          "rent_index": 3320,
+          "home_value_index": 801000
+        }
+      ]
+    }
+  ]
+}
+```
+
+Required fields for frontend:
+
+- `id`
+- `name`
+- `address`
+- `city`
+- `state`
+- `bedrooms`
+- `bathrooms`
+- `square_feet`
+- `monthly_rent`
+- `estimated_value`
+- `occupancy_rate`
+- `walk_score`
+- `transit_score`
+- `renter_takeaway`
+- `market_history`
+
+### `GET /api/properties/:id`
+
+Purpose:
+
+- returns full property detail for the selected property
+
+Response:
+
+```json
+{
+  "id": "742-evergreen-terrace",
+  "name": "742 Evergreen Terrace",
+  "address": "742 Evergreen Terrace",
+  "city": "San Francisco",
+  "state": "CA",
+  "zip_code": "94102",
+  "neighborhood": "Sunset District",
+  "bedrooms": 2,
+  "bathrooms": 2,
+  "square_feet": 1200,
+  "monthly_rent": 3800,
+  "estimated_value": 875000,
+  "occupancy_rate": 0.95,
+  "walk_score": 82,
+  "transit_score": 78,
+  "renter_takeaway": "Stable rent appreciation and strong transit access make this a dependable comparison anchor for renters who want a balanced San Francisco option.",
+  "market_history": [
+    {
+      "month": "2024-03",
+      "rent_index": 3320,
+      "home_value_index": 801000
+    }
+  ],
+  "market_summary": {
+    "rent_growth_12m": 0.14,
+    "value_growth_12m": 0.09,
+    "risk_band": "Low"
+  }
+}
+```
+
+Required fields for frontend:
+
+- everything from `/api/properties`
+- plus:
+  - `zip_code`
+  - `market_summary.rent_growth_12m`
+  - `market_summary.value_growth_12m`
+  - `market_summary.risk_band`
+
+### `GET /api/valuation/:id`
+
+Purpose:
+
+- returns the landlord forecast object
+
+Response:
+
+```json
+{
+  "property_id": "742-evergreen-terrace",
+  "investment_score": 75,
+  "appreciation_probability": 0.75,
+  "projected_value_12m": 910000,
+  "expected_gain_12m": 35000,
+  "summary": "This prototype forecast favors markets with positive recent rent growth, positive home-value momentum, and high occupancy. It is an explainable scoring model, not a guarantee.",
+  "drivers": [
+    "Strong rent growth at 4.9% annually.",
+    "Excellent home value appreciation at 7.9%.",
+    "High occupancy indicates strong demand at 95%.",
+    "Excellent neighborhood accessibility."
+  ],
+  "factor_breakdown": {
+    "rent_growth": 49,
+    "value_growth": 79,
+    "occupancy": 95,
+    "neighborhood": 88
+  },
+  "market_metrics": {
+    "occupancy_rate": 95,
+    "neighborhood_score": 88
+  }
+}
+```
+
+Required fields for frontend:
+
+- `property_id`
+- `investment_score`
+- `appreciation_probability`
+- `projected_value_12m`
+- `expected_gain_12m`
+- `summary`
+- `drivers`
+- `factor_breakdown.rent_growth`
+- `factor_breakdown.value_growth`
+- `factor_breakdown.occupancy`
+- `factor_breakdown.neighborhood`
+- `market_metrics.occupancy_rate`
+- `market_metrics.neighborhood_score`
+
+### Contract rules
+
+- Do not remove or rename required fields without updating the frontend.
+- Adding extra fields is safe.
+- Model outputs should be added in new fields rather than replacing current ones immediately.
+- `market_history` entries should stay in this shape:
+
+```json
+{
+  "month": "YYYY-MM",
+  "rent_index": 0,
+  "home_value_index": 0
+}
+```
+
 ## Project structure
 
 ```text
