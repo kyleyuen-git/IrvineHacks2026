@@ -2,7 +2,7 @@ import pandas as pd
 import re #re = regular expressions module. Regular expressions (regex) are patterns used to match strings.
 
 # Load CSV and separate date columns
-df = pd.read_csv("backendZil/zillow_data/City_zori_uc_sfrcondomfr_sm_month.csv")
+df = pd.read_csv("backend/zillow_data/City_zori_uc_sfrcondomfr_sm_month.csv")
 # Filter for Irvine, CA
 df = df[(df["RegionName"] == "Irvine") & (df["State"] == "CA")]
 
