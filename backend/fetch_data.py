@@ -10,7 +10,7 @@ def fetch_sale_data():
     query_params = {
         "city" : "Irvine",
         "state": "CA",
-        "status": "Active",
+        "status": "Inactive",
         "limit": 500,
         "offset" : 0,
     }
@@ -19,7 +19,7 @@ def fetch_sale_data():
         "X-Api-Key": secret_key.api_key
     }   
     count = 0
-    while(count==0 or len(data) > 0):
+    while(count==0 or len(data) > 0) and count < 5:
         count += 1
         query_string = urllib.parse.urlencode(query_params)
         url = base_url + "?" + query_string
@@ -61,4 +61,4 @@ def fetch_rent_data():
             break
     print(response.headers)
 
-fetch_rent_data()
+fetch_sale_data()
