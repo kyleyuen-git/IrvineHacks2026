@@ -1,0 +1,14 @@
+node_modules/
+dist/
+package.json
+package-lock.json
+src/
+vite.config.js
+index.html
+README.md
+Dockerfile
+railway.json
+.github/
+.gitignore
+.DS_Store
+*.bak
